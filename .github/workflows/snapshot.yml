@@ -12,9 +12,7 @@ jobs:
   create-snapshot-release:
     runs-on: ubuntu-latest
     steps:
-      -
-        # https://github.com/actions/checkout/releases
-        name: Create a snapshot release
-        uses: actions/checkout@v1
+      # https://github.com/actions/checkout/releases
+      - uses: actions/checkout@v1
+      - name: Create a snapshot release
         run: make snapshot-release
-
