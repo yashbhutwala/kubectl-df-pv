@@ -26,6 +26,5 @@ builds:
     flags: -tags netgo -installsuffix netgo
     binary: df-pv
     hooks: {}
-
 snapshot:
   name_template: SNAPSHOT-{{ .Commit }}
