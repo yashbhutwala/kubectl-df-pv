@@ -1,0 +1,20 @@
+# Sources:
+# https://github.com/replicatedhq/outdated/blob/v0.4.0/.github/workflows/snapshot.yaml
+
+name: snapshot-release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  create-snapshot-release:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        # https://github.com/actions/checkout/releases
+        name: Create a snapshot release
+        uses: actions/checkout@v1
+        run: make snapshot-release
+

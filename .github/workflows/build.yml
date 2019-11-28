@@ -1,0 +1,20 @@
+# Sources:
+# https://github.com/replicatedhq/outdated/blob/v0.4.0/.github/workflows/build.yaml
+
+name: build-and-test
+
+on:
+  push:
+    branches-ignore:
+      - master
+    tags-ignore:
+      - "*"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build and test
+        run: make
+

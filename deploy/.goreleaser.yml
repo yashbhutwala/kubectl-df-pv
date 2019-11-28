@@ -1,0 +1,46 @@
+# Sources:
+# https://github.com/replicatedhq/outdated/blob/v0.4.0/deploy/.goreleaser.yml
+project_name: df-pv
+release:
+  github:
+    owner: yashbhutwala
+    name: kubectl-df-pv
+builds:
+  - id: df-pv
+    goos:
+    - linux
+    - windows
+    - darwin
+    goarch:
+    - amd64
+    - "386"
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    main: cmd/plugin/main.go
+    ldflags: -s -w
+      -X github.com/replicatedhq/outdated/pkg/version.version={{.Version}}
+      -X github.com/replicatedhq/outdated/pkg/version.gitSHA={{.Commit}}
+      -X github.com/replicatedhq/outdated/pkg/version.buildTime={{.Date}}
+      -extldflags "-static"
+    flags: -tags netgo -installsuffix netgo
+    binary: df-pv
+    hooks: {}
+archives:
+  - id: df-pv
+    builds:
+    - df-pv
+    format: tar.gz
+    format_overrides:
+    - goos: windows
+      format: zip
+    name_template: '{{ .Binary }}_{{.Version}}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{.Arm }}{{ end }}-{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
+    files:
+      - licence*
+      - LICENCE*
+      - license*
+      - LICENSE*
+      - readme*
+      - README*
+      - changelog*
+      - CHANGELOG*

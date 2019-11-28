@@ -17,14 +17,13 @@ fmt:
 vet:
 	go vet ./pkg/... ./cmd/...
 
-.PHONY: kubernetes-deps
-kubernetes-deps:
-	go get k8s.io/client-go@kubernetes-1.15.3
-#     go get k8s.io/client-go@v11.0.0
-# 	go get k8s.io/api@kubernetes-1.14.0
-# 	go get k8s.io/apimachinery@kubernetes-1.14.0
-# 	go get k8s.io/cli-runtime@kubernetes-1.14.0
+# Sources:
+# https://github.com/replicatedhq/outdated/blob/v0.4.0/Makefile
+.PHONY: snapshot-release
+snapshot-release:
+	curl -sL https://git.io/goreleaser | bash -s -- --rm-dist --snapshot --config deploy/.goreleaser.snapshot.yml
 
-.PHONY: setup
-setup:
-	make -C setup
+.PHONY: release
+release: export GITHUB_TOKEN = $(shell echo ${GITHUB_TOKEN})
+release:
+	curl -sL https://git.io/goreleaser | bash -s -- --rm-dist --config deploy/.goreleaser.yml
