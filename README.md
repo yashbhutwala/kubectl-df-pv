@@ -20,16 +20,18 @@ TODO
 
 ## Motivation
 
-Have you ever wondered, "How much free disk space do all my PVs have?"  Me too!  That's why I built this plugin!  I have always just wanted to quick way to see the disk usage of my Persistent Volumes (similar to [`df`](https://en.wikipedia.org/wiki/Df_(Unix)) or `du` in Unix).  It turns out I'm not the only one, there has been many upstream Kubernetes issues open again and again about this, even some KEPs and PRs.  I have compiled some of the issues and KEPs that I've seen in the wild here:  
+Have you ever wondered, "How much free disk space do all my PVs have?"  Me too!  That's why I built this plugin!  I have always just wanted to quick way to see the disk usage of my Persistent Volumes (similar to [`df`](https://en.wikipedia.org/wiki/Df_(Unix)) or `du` in Unix).  It turns out I'm not the only one, there has been many upstream Kubernetes issues open again and again about this, even some KEPs and PRs.  I have compiled some of the issues and KEPs that I've seen in the wild here:
 
-#### Issues
+### Issues
+
 ["this feature is needed .. !!!!" - @halradaideh](https://github.com/kubernetes/kubernetes/issues/42465)
 
 ["There was a plan to implement this for 1.7 but we ran out of time."](https://github.com/kubernetes/kubernetes/issues/47649)
 
 ["I need to know to which Pod(s) a PVC is being mounted to, without having to go through each Pod one by one checking the Volume mounts and the PersistentVolumeClaim."](https://github.com/kubernetes/kubernetes/issues/65233)
 
-#### KEPs
+### KEPs
+
 ["PVC should show how much of the available capacity is used vs available"](https://github.com/kubernetes/enhancements/issues/293)
 
 ["Expose storage metrics to end users"](https://github.com/kubernetes/enhancements/issues/363)
@@ -38,7 +40,8 @@ Have you ever wondered, "How much free disk space do all my PVs have?"  Me too! 
 
 ["exposing storage metrics to users"... "Status? Was it done?"](https://github.com/kubernetes/community/pull/855)
 
-#### Other relevant/rabbit-hole links:
+### Other relevant/rabbit-hole links
+
 ["Volume metrics exposed in /stats/summary not available in /metrics"](https://github.com/kubernetes/kubernetes/issues/34137)
 
 [interesting metric PR](https://github.com/kubernetes/kubernetes/pull/19741/files)
@@ -58,4 +61,3 @@ Have you ever wondered, "How much free disk space do all my PVs have?"  Me too! 
 [cli-runtime tableprinter usage](https://github.com/kubernetes/cli-runtime/blob/kubernetes-1.17.0-rc.1/pkg/printers/tableprinter_test.go)
 
 [kubectl using cli-runtime; sorting is still not implemented](https://github.com/kubernetes/kubectl/blob/kubernetes-1.17.0-rc.1/pkg/cmd/get/humanreadable_flags.go#L98)
-
