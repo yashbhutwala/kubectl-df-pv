@@ -1,0 +1,41 @@
+# Sources:
+# https://github.com/goreleaser/goreleaser-action/blob/v1.0.2/.github/workflows/release.yml
+# https://github.com/marketplace/actions/goreleaser-action
+
+name: release
+
+on:
+  push:
+    # https://github.com/goreleaser/goreleaser-action/blob/v1.0.2/.github/workflows/release.yml#L5
+    branches-ignore:
+      - '**'
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        # https://github.com/actions/checkout/releases
+        name: Checkout
+        uses: actions/checkout@v1
+      -
+        # https://github.com/actions/setup-go/releases
+        name: Set up Go
+        uses: actions/setup-go@v1
+      -
+        # https://github.com/goreleaser/goreleaser-action/releases
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v1
+        with:
+          # https://github.com/goreleaser/goreleaser/releases
+          version: latest
+          args: release --rm-dist
+          # https://goreleaser.com/customization/#Signing
+          key: ${{ secrets.YOUR_PRIVATE_KEY }}
+          signs:
+            - artifacts: checksum
+              args: ["--batch", "-u", "<key id, fingerprint, email, ...>", "--output", "${signature}", "--detach-sign", "${artifact}"]
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
