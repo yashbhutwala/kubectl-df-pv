@@ -18,6 +18,14 @@ kubectl df-pv
 
 TODO
 
+## TODO Features
+
+- [x] `df` for all Persistent Volumes in the cluster
+- [ ] color based on usage (i.e.: if greater than 75%, red)
+- [ ] sort-by flag
+- [ ] `df -h`; `df -k`, `df -l`
+- [ ] print PV name (right now, it prints the PVC name)
+
 ## Motivation
 
 Have you ever wondered, "How much free disk space do all my PVs have?"  Me too!  That's why I built this plugin!  I have always just wanted to quick way to see the disk usage of my Persistent Volumes (similar to [`df`](https://en.wikipedia.org/wiki/Df_(Unix)) or `du` in Unix).  It turns out I'm not the only one, there has been many upstream Kubernetes issues open again and again about this, even some KEPs and PRs.  I have compiled some of the issues and KEPs that I've seen in the wild here:
