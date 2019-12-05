@@ -4,26 +4,38 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 ## Requirements
 
-This utility is meant for `cluster-admin` like user; specifically, you need a service account with enough RBAC privileges to access `api/v1/nodes/` from the `api-server`.
+- [ ] `api-server` has `api/v1/nodes/` endpoint enabled
+- [ ] Appropriate RBAC.  This utility is meant for `cluster-admin` like user; specifically, you need a service account with enough RBAC privileges to access `api/v1/nodes/` from the `api-server`.
+- [ ] Using a storage provisioner that populates pv metrics in a compatible manner (see what's been [tested](##Tested) below)
 
 ## Quick Start
 
 ```shell script
-# [TODO: not yet] curl https://krew.sh/outdated | bash
-# [TODO: not yet] kubectl krew install df-pv
+curl https://krew.sh/df-pv | bash
+# . ~/.bashrc   # run if you use bash shell
+# . ~/.zshrc    # run if you use zsh shell
 kubectl df-pv
 ```
 
 ## Example
 
-TODO
+![example output](doc/example-output.png)
+
+## Tested
+
+- [x] `kubeadm` configured bare-metal cluster with `rook-ceph.rbd.csi.ceph.com` dynamic provisioner
+- [x] GKE with `kubernetes.io/gce-pd` dynamic provisioner
+- [ ] minikube
+- [ ] kind
+- [ ] EKS
+- [ ] AKS
 
 ## TODO Features
 
 - [x] `df` for all Persistent Volumes in the cluster
+- [ ] `df -h`; `df -k`, `df -l` (make `df -h` the default)
 - [ ] color based on usage (i.e.: if greater than 75%, red)
 - [ ] sort-by flag
-- [ ] `df -h`; `df -k`, `df -l`
 - [ ] print PV name (right now, it prints the PVC name)
 
 ## Motivation

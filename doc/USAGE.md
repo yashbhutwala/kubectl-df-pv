@@ -4,10 +4,8 @@
 The following assumes you have the plugin installed via
 
 ```shell
-kubectl krew install df-pv
+curl https://krew.sh/df-pv | bash
+# . ~/.bashrc   # run if you use bash shell
+# . ~/.zshrc    # run if you use zsh shell
 kubectl df-pv
 ```
-
-## How it works
-
-Write a brief description of your plugin here.
