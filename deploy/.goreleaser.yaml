@@ -1,6 +1,6 @@
 # Sources:
 # https://github.com/replicatedhq/outdated/blob/v0.3.2/deploy/.goreleaser.yaml
-project_name: df-pv
+project_name: kubectl-df-pv
 release:
   github:
     owner: yashbhutwala
