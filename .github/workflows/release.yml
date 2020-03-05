@@ -16,12 +16,20 @@ jobs:
       # https://github.com/actions/checkout/releases
       - uses: actions/checkout@v2
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v1
+        uses: goreleaser/goreleaser-action@v1.3.1
         with:
           version: latest
           args: release --rm-dist --config deploy/.goreleaser.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # https://github.com/rajatjindal/krew-release-bot/releases
+      # https://github.com/rajatjindal/kubectl-evict-pod/blob/v0.0.7/.krew.yaml
+      # https://github.com/corneliusweig/ketall/blob/v1.3.2/hack/get-all.yaml
+      # https://github.com/corneliusweig/ketall/blob/v1.3.2/.github/workflows/ci.yml#L84
+      - name: Update new version in krew-index
+        uses: rajatjindal/krew-release-bot@v0.0.37
+        with:
+          krew_template_file: deploy/krew/df-pv.yaml
 #      -
 #        # https://github.com/actions/setup-go/releases
 #        name: Set up Go
