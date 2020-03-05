@@ -33,7 +33,8 @@ archives:
     format_overrides:
     - goos: windows
       format: zip
-    name_template: '{{ .Binary }}_{{.Version}}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{.Arm }}{{ end }}-{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
+    # name_template: '{{ .Binary }}_{{.Version}}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{.Arm }}{{ end }}-{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
+    name_template: '{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     files:
       - licence*
       - LICENCE*

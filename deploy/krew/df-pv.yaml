@@ -9,7 +9,7 @@ spec:
       matchLabels:
         os: linux
         arch: amd64
-    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/df-pv_{{ .TagName }}_linux_amd64-{{ .TagName }}.tar.gz" .TagName }}
+    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/kubectl-df-pv_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}
     files:
     - from: "df-pv"
       to: "."
@@ -20,7 +20,7 @@ spec:
       matchLabels:
         os: darwin
         arch: amd64
-    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/df-pv_{{ .TagName }}_darwin_amd64-{{ .TagName }}.tar.gz" .TagName }}
+    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/kubectl-df-pv_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}
     files:
     - from: "df-pv"
       to: "."
@@ -31,7 +31,7 @@ spec:
       matchLabels:
         os: windows
         arch: amd64
-    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/df-pv_{{ .TagName }}_windows_amd64-{{ .TagName }}.zip" .TagName }}
+    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/kubectl-df-pv_{{ .TagName }}_windows_amd64.zip" .TagName }}
     files:
     - from: "df-pv.exe"
       to: "."
