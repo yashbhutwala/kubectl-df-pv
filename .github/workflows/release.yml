@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # https://github.com/actions/checkout/releases
-      - uses: actions/checkout@v1
-      - name: Create a release
-        run: make release
+      - uses: actions/checkout@v2
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v1
+        with:
+          version: latest
+          args: release --rm-dist --config deploy/.goreleaser.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #      -

@@ -1,5 +1,5 @@
 # Sources:
-# https://github.com/replicatedhq/outdated/blob/v0.4.0/deploy/.goreleaser.yml
+# https://github.com/replicatedhq/outdated/blob/v0.3.2/deploy/.goreleaser.yaml
 project_name: df-pv
 release:
   github:
@@ -16,12 +16,11 @@ builds:
     - "386"
     env:
       - CGO_ENABLED=0
-      - GO111MODULE=on
     main: cmd/plugin/main.go
     ldflags: -s -w
-      -X github.com/replicatedhq/outdated/pkg/version.version={{.Version}}
-      -X github.com/replicatedhq/outdated/pkg/version.gitSHA={{.Commit}}
-      -X github.com/replicatedhq/outdated/pkg/version.buildTime={{.Date}}
+      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.version={{.Version}}
+      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
+      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.buildTime={{.Date}}
       -extldflags "-static"
     flags: -tags netgo -installsuffix netgo
     binary: df-pv
