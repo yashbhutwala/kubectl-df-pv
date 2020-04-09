@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
 
 	// third party dependencies
@@ -101,7 +102,7 @@ func (df DisplayFree) ListPVCs(configFlags *genericclioptions.ConfigFlags, outpu
 		return nil, errors.Wrap(err, "failed to create clientset")
 	}
 
-	nodes, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list nodes")
 	}
@@ -114,7 +115,7 @@ func (df DisplayFree) ListPVCs(configFlags *genericclioptions.ConfigFlags, outpu
 		//outputCh <- fmt.Sprintf("Node: %s/", node.Name)
 
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-		responseRawArrayOfBytes, err := request.DoRaw()
+		responseRawArrayOfBytes, err := request.DoRaw(context.TODO())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get stats from node")
 		}
