@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/tj/go-spin"
+
 	//"github.com/fatih/color"
 
 	// k8s dependencies
@@ -40,7 +40,6 @@ func RootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			df := plugin.DisplayFree{}
 
-			s := spin.New()
 			finishedCh := make(chan bool, 1)
 			nodeName := make(chan string, 1)
 			go func() {
@@ -54,9 +53,9 @@ func RootCmd() *cobra.Command {
 						lastNodeName = n
 					case <-time.After(time.Millisecond * 100):
 						if lastNodeName == "" {
-							fmt.Printf("\r  \033[36mSearching for PVCs\033[m %s", s.Next())
+							fmt.Printf("\r  \033[36mSearching for PVCs\033[m ")
 						} else {
-							fmt.Printf("\r  \033[36mSearching for PVCs\033[m %s (%s)", s.Next(), lastNodeName)
+							fmt.Printf("\r  \033[36mSearching for PVCs\033[m (%s)", lastNodeName)
 						}
 					}
 				}
