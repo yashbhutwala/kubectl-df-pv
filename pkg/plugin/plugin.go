@@ -4,10 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	// third party dependencies
 	"github.com/pkg/errors"
-
-	// k8s dependencies
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -28,9 +25,9 @@ type RunningPvc struct {
 	UsedBytes      resource.Quantity `json:"usedBytes"`
 	PercentageUsed float64
 
-	INodesFree      int `json:"inodesFree"` // TODO: check if inodes is int ot int64?
-	INodes          int `json:"inodes"`
-	INodesUsed      int `json:"inodesUsed"`
+	INodesFree      resource.Quantity `json:"inodesFree"`
+	INodes          resource.Quantity `json:"inodes"`
+	INodesUsed      resource.Quantity `json:"inodesUsed"`
 	PercentageIUsed float64
 
 	VolumeMountName string `json:"volumeMountName"`
@@ -76,14 +73,16 @@ EXAMPLE:
 "name": "vault-client"
 }
 */
+// https://github.com/kubernetes/kubernetes/blob/v1.18.5/pkg/volume/volume.go
+// https://github.com/kubernetes/kubernetes/blob/v1.18.5/pkg/volume/csi/csi_client.go#L553
 type Volume struct {
-	Time           string            `json:"time"`
+	Time           metav1.Time            `json:"time"`
 	AvailableBytes resource.Quantity `json:"availableBytes"`
 	CapacityBytes  resource.Quantity `json:"capacityBytes"`
 	UsedBytes      resource.Quantity `json:"usedBytes"`
-	INodesFree     int               `json:"inodesFree"` // TODO: check if inodes is int ot int64?
-	INodes         int               `json:"inodes"`
-	INodesUsed     int               `json:"inodesUsed"`
+	INodesFree     resource.Quantity `json:"inodesFree"`
+	INodes         resource.Quantity `json:"inodes"`
+	INodesUsed     resource.Quantity `json:"inodesUsed"`
 	Name           string            `json:"name"`
 	PvcRef         struct {
 		PvcName      string `json:"name"`
@@ -112,7 +111,7 @@ func (df DisplayFree) ListPVCs(configFlags *genericclioptions.ConfigFlags, outpu
 
 	for _, node := range nodes.Items {
 
-		//outputCh <- fmt.Sprintf("Node: %s/", node.Name)
+		// outputCh <- fmt.Sprintf("Node: %s/", node.Name)
 
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.TODO())
@@ -141,12 +140,12 @@ func (df DisplayFree) ListPVCs(configFlags *genericclioptions.ConfigFlags, outpu
 						INodes:          vol.INodes,
 						INodesFree:      vol.INodesFree,
 						INodesUsed:      vol.INodesUsed,
-						PercentageIUsed: (float64(vol.INodesUsed) / float64(vol.INodes)) * 100.0,
+						PercentageIUsed: (float64(vol.INodesUsed.Value()) / float64(vol.INodes.Value())) * 100.0,
 
 						VolumeMountName: vol.Name,
 					}
 
-					//outputCh <- fmt.Sprintf("%s/%s", node.Name, runningPvc.PvcName)
+					// outputCh <- fmt.Sprintf("%s/%s", node.Name, runningPvc.PvcName)
 					listOfPvc = append(listOfPvc, runningPvc)
 				}
 			}

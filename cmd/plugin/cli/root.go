@@ -7,19 +7,13 @@ import (
 	"strings"
 	"time"
 
-	// third party dependencies
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	//"github.com/fatih/color"
-
-	// k8s dependencies
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 
-	// this repo
 	"github.com/yashbhutwala/kubectl-df-pv/pkg/plugin"
 )
 
@@ -86,19 +80,19 @@ func RootCmd() *cobra.Command {
 			var rows []metav1.TableRow
 
 			// use white as default
-			//c := color.New(color.FgHiWhite)
+			// c := color.New(color.FgHiWhite)
 
 			for _, pvc := range listOfRunningPvc {
 
-				//if pvc.PercentageUsed > 75 || pvc.PercentageIUsed > 75 {
+				// if pvc.PercentageUsed > 75 || pvc.PercentageIUsed > 75 {
 				//	c = color.New(color.FgHiRed)
-				//} else if pvc.PercentageUsed > 50 || pvc.PercentageIUsed > 50 {
+				// } else if pvc.PercentageUsed > 50 || pvc.PercentageIUsed > 50 {
 				//	c = color.New(color.FgHiMagenta)
-				//} else if pvc.PercentageUsed > 25 || pvc.PercentageIUsed > 25 {
+				// } else if pvc.PercentageUsed > 25 || pvc.PercentageIUsed > 25 {
 				//	c = color.New(color.FgHiYellow)
-				//}
+				// }
 
-				//thisRow := metav1.TableRow{Cells: []interface{}{
+				// thisRow := metav1.TableRow{Cells: []interface{}{
 				//	c.Sprintf("%s", pvc.PvcName),
 				//	c.Sprintf("%s", pvc.Namespace),
 				//	c.Sprintf("%s", pvc.PodName),
@@ -109,7 +103,7 @@ func RootCmd() *cobra.Command {
 				//	c.Sprintf("%d", pvc.INodesUsed),
 				//	c.Sprintf("%d", pvc.INodesFree),
 				//	c.Sprintf("%.2f", pvc.PercentageIUsed),
-				//}}
+				// }}
 				thisRow := metav1.TableRow{Cells: []interface{}{
 					fmt.Sprintf("%s", pvc.PvcName),
 					fmt.Sprintf("%s", pvc.Namespace),
@@ -118,8 +112,8 @@ func RootCmd() *cobra.Command {
 					fmt.Sprintf("%s", pvc.UsedBytes.String()),
 					fmt.Sprintf("%s", pvc.AvailableBytes.String()),
 					fmt.Sprintf("%.2f", pvc.PercentageUsed),
-					fmt.Sprintf("%d", pvc.INodesUsed),
-					fmt.Sprintf("%d", pvc.INodesFree),
+					fmt.Sprintf("%s", pvc.INodesUsed.String()),
+					fmt.Sprintf("%s", pvc.INodesFree.String()),
 					fmt.Sprintf("%.2f", pvc.PercentageIUsed),
 				}}
 				rows = append(rows, thisRow)
