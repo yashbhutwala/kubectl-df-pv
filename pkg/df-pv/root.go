@@ -31,7 +31,6 @@ func setupRootCommand() *cobra.Command {
 		Long:  `df-pv`,
 		Args:  cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			df := DisplayFree{}
 			finishedCh := make(chan bool, 1)
 			nodeName := make(chan string, 1)
 			go func() {
@@ -45,9 +44,9 @@ func setupRootCommand() *cobra.Command {
 						lastNodeName = n
 					case <-time.After(time.Millisecond * 100):
 						if lastNodeName == "" {
-							fmt.Printf("\r  \033[36mSearching for PVCs\033[m ")
+							fmt.Printf("\r  \033[36mSearching for PVCs\033[m")
 						} else {
-							fmt.Printf("\r  \033[36mSearching for PVCs\033[m (%s)", lastNodeName)
+							fmt.Printf("\r  %s \n", lastNodeName)
 						}
 					}
 				}
@@ -56,13 +55,13 @@ func setupRootCommand() *cobra.Command {
 				finishedCh <- true
 			}()
 
-			listOfRunningPvc, err := df.ListPVCs(flags, nodeName)
+			listOfRunningPvc, err := ListPVCs(flags, nodeName)
 			if err != nil {
 				return errors.Cause(err)
 			}
 			finishedCh <- true
 
-			columns := []metav1.TableColumnDefinition{
+			var columns = []metav1.TableColumnDefinition{
 				{Name: "PVC", Type: "string"},
 				{Name: "Namespace", Type: "string"},
 				{Name: "Pod", Type: "string"},
@@ -74,14 +73,12 @@ func setupRootCommand() *cobra.Command {
 				{Name: "ifree", Type: "string"},
 				{Name: "Percentiused", Type: "string"},
 			}
-
 			var rows []metav1.TableRow
 
 			// use white as default
 			// c := color.New(color.FgHiWhite)
 
 			for _, pvc := range listOfRunningPvc {
-
 				// if pvc.PercentageUsed > 75 || pvc.PercentageIUsed > 75 {
 				//	c = color.New(color.FgHiRed)
 				// } else if pvc.PercentageUsed > 50 || pvc.PercentageIUsed > 50 {
@@ -89,29 +86,16 @@ func setupRootCommand() *cobra.Command {
 				// } else if pvc.PercentageUsed > 25 || pvc.PercentageIUsed > 25 {
 				//	c = color.New(color.FgHiYellow)
 				// }
-
-				// thisRow := metav1.TableRow{Cells: []interface{}{
-				//	c.Sprintf("%s", pvc.PvcName),
-				//	c.Sprintf("%s", pvc.Namespace),
-				//	c.Sprintf("%s", pvc.PodName),
-				//	c.Sprintf("%s", pvc.CapacityBytes.String()),
-				//	c.Sprintf("%s", pvc.UsedBytes.String()),
-				//	c.Sprintf("%s", pvc.AvailableBytes.String()),
-				//	c.Sprintf("%.2f", pvc.PercentageUsed),
-				//	c.Sprintf("%d", pvc.INodesUsed),
-				//	c.Sprintf("%d", pvc.INodesFree),
-				//	c.Sprintf("%.2f", pvc.PercentageIUsed),
-				// }}
 				thisRow := metav1.TableRow{Cells: []interface{}{
-					fmt.Sprintf("%s", pvc.PvcName),
+					fmt.Sprintf("%s", pvc.PVCName),
 					fmt.Sprintf("%s", pvc.Namespace),
 					fmt.Sprintf("%s", pvc.PodName),
-					fmt.Sprintf("%s", pvc.CapacityBytes.String()),
-					fmt.Sprintf("%s", pvc.UsedBytes.String()),
-					fmt.Sprintf("%s", pvc.AvailableBytes.String()),
+					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.CapacityBytes, flags.outputFormat)),
+					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.UsedBytes, flags.outputFormat)),
+					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.AvailableBytes, flags.outputFormat)),
 					fmt.Sprintf("%.2f", pvc.PercentageUsed),
-					fmt.Sprintf("%s", pvc.INodesUsed.String()),
-					fmt.Sprintf("%s", pvc.INodesFree.String()),
+					fmt.Sprintf("%d", pvc.InodesUsed),
+					fmt.Sprintf("%d", pvc.InodesFree),
 					fmt.Sprintf("%.2f", pvc.PercentageIUsed),
 				}}
 				rows = append(rows, thisRow)
@@ -131,11 +115,31 @@ func setupRootCommand() *cobra.Command {
 			return nil
 		},
 	}
-	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "h", "output format")
+	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
 
-	// KubernetesConfigFlags = genericclioptions.NewConfigFlags(false)
-	// KubernetesConfigFlags.AddFlags(rootCmd.Flags())
+	flags.kubernetesConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
+}
+
+// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+func convertQuantityValueToHumanReadableSIUnitString(quantity *resource.Quantity, suffix string) string {
+	var convertedValue int64
+	switch suffix {
+
+	case "Mi":
+		// https://en.wikipedia.org/wiki/Mebibyte
+		// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
+		convertedValue = quantity.Value() / 1048576
+	case "Gi":
+		// https://en.wikipedia.org/wiki/Gibibyte
+		// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
+		convertedValue = quantity.Value() / 1073741824
+	case "Ki":
+		// https://en.wikipedia.org/wiki/Kibibyte
+		// 1 KiB = 2^10 bytes = 1024 bytes
+		convertedValue = quantity.Value() / 1024
+	}
+	return fmt.Sprintf("%d%s", convertedValue, suffix)
 }
 
 func InitAndExecute() {
@@ -146,30 +150,27 @@ func InitAndExecute() {
 	}
 }
 
-type DisplayFree struct {
-}
-
-type RunningPvc struct {
+type OutputPVC struct {
 	PodName   string `json:"podName"`
 	Namespace string `json:"namespace"`
 
-	PvcName string `json:"pvcName"`
+	PVCName string `json:"pvcName"`
 
-	AvailableBytes resource.Quantity `json:"availableBytes"`
-	CapacityBytes  resource.Quantity `json:"capacityBytes"`
-	UsedBytes      resource.Quantity `json:"usedBytes"`
+	AvailableBytes *resource.Quantity `json:"availableBytes"`
+	CapacityBytes  *resource.Quantity `json:"capacityBytes"`
+	UsedBytes      *resource.Quantity `json:"usedBytes"`
 	PercentageUsed float64
 
-	INodesFree      resource.Quantity `json:"inodesFree"`
-	INodes          resource.Quantity `json:"inodes"`
-	INodesUsed      resource.Quantity `json:"inodesUsed"`
+	InodesFree      int64 `json:"inodesFree"`
+	Inodes          int64 `json:"inodes"`
+	InodesUsed      int64 `json:"inodesUsed"`
 	PercentageIUsed float64
 
 	VolumeMountName string `json:"volumeMountName"`
 }
 
 type ServerResponseStruct struct {
-	Pods []Pod `json:"pods"`
+	Pods []*Pod `json:"pods"`
 }
 
 type Pod struct {
@@ -192,7 +193,7 @@ type Pod struct {
 		     {...}
 		    ]
 	*/
-	ListOfVolumes []Volume `json:"volume"`
+	ListOfVolumes []*Volume `json:"volume"`
 }
 
 /*
@@ -211,21 +212,47 @@ EXAMPLE:
 // https://github.com/kubernetes/kubernetes/blob/v1.18.5/pkg/volume/volume.go
 // https://github.com/kubernetes/kubernetes/blob/v1.18.5/pkg/volume/csi/csi_client.go#L553
 type Volume struct {
-	Time           metav1.Time       `json:"time"`
-	AvailableBytes resource.Quantity `json:"availableBytes"`
-	CapacityBytes  resource.Quantity `json:"capacityBytes"`
-	UsedBytes      resource.Quantity `json:"usedBytes"`
-	INodesFree     resource.Quantity `json:"inodesFree"`
-	INodes         resource.Quantity `json:"inodes"`
-	INodesUsed     resource.Quantity `json:"inodesUsed"`
-	Name           string            `json:"name"`
-	PvcRef         struct {
+	// The time at which these stats were updated.
+	Time metav1.Time `json:"time"`
+
+	// Used represents the total bytes used by the Volume.
+	// Note: For block devices this maybe more than the total size of the files.
+	UsedBytes int64 `json:"usedBytes"`
+
+	// Capacity represents the total capacity (bytes) of the volume's
+	// underlying storage. For Volumes that share a filesystem with the host
+	// (e.g. emptydir, hostpath) this is the size of the underlying storage,
+	// and will not equal Used + Available as the fs is shared.
+	CapacityBytes int64 `json:"capacityBytes"`
+
+	// Available represents the storage space available (bytes) for the
+	// Volume. For Volumes that share a filesystem with the host (e.g.
+	// emptydir, hostpath), this is the available space on the underlying
+	// storage, and is shared with host processes and other Volumes.
+	AvailableBytes int64 `json:"availableBytes"`
+
+	// InodesUsed represents the total inodes used by the Volume.
+	InodesUsed int64 `json:"inodesUsed"`
+
+	// Inodes represents the total number of inodes available in the volume.
+	// For volumes that share a filesystem with the host (e.g. emptydir, hostpath),
+	// this is the inodes available in the underlying storage,
+	// and will not equal InodesUsed + InodesFree as the fs is shared.
+	Inodes int64 `json:"inodes"`
+
+	// InodesFree represent the inodes available for the volume.  For Volumes that share
+	// a filesystem with the host (e.g. emptydir, hostpath), this is the free inodes
+	// on the underlying storage, and is shared with host processes and other volumes
+	InodesFree int64 `json:"inodesFree"`
+
+	Name   string `json:"name"`
+	PvcRef struct {
 		PvcName      string `json:"name"`
 		PvcNamespace string `json:"namespace"`
 	} `json:"pvcRef"`
 }
 
-func (df DisplayFree) ListPVCs(flags *flagpole, outputCh chan string) ([]RunningPvc, error) {
+func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
 	config, err := flags.kubernetesConfigFlags.ToRESTConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read kubeconfig")
@@ -241,15 +268,12 @@ func (df DisplayFree) ListPVCs(flags *flagpole, outputCh chan string) ([]Running
 		return nil, errors.Wrap(err, "failed to list nodes")
 	}
 
-	var listOfPvc []RunningPvc
+	var listOfPvc []*OutputPVC
 	var jsonConvertedIntoStruct ServerResponseStruct
 
 	for _, node := range nodes.Items {
-
-		outputCh <- fmt.Sprintf("Node: %s/", node.Name)
-
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-		responseRawArrayOfBytes, err := request.DoRaw(context.TODO())
+		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get stats from node")
 		}
@@ -261,26 +285,32 @@ func (df DisplayFree) ListPVCs(flags *flagpole, outputCh chan string) ([]Running
 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
-				if len(vol.PvcRef.PvcName) != 0 {
-					runningPvc := RunningPvc{
+				desiredNamespace := *flags.kubernetesConfigFlags.Namespace
+				if 0 < len(desiredNamespace){
+					if vol.PvcRef.PvcNamespace != desiredNamespace {
+						continue
+					}
+				}
+
+				if 0 < len(vol.PvcRef.PvcName) {
+					runningPvc := &OutputPVC{
 						PodName:   pod.PodRef.Name,
 						Namespace: pod.PodRef.Namespace,
 
-						PvcName:        vol.PvcRef.PvcName,
-						AvailableBytes: vol.AvailableBytes,
-						CapacityBytes:  vol.CapacityBytes,
-						UsedBytes:      vol.UsedBytes,
-						PercentageUsed: (float64(vol.UsedBytes.Value()) / float64(vol.CapacityBytes.Value())) * 100.0,
+						PVCName:        vol.PvcRef.PvcName,
+						AvailableBytes: resource.NewQuantity(vol.AvailableBytes, resource.BinarySI),
+						CapacityBytes:  resource.NewQuantity(vol.CapacityBytes, resource.BinarySI),
+						UsedBytes:      resource.NewQuantity(vol.UsedBytes, resource.BinarySI),
+						PercentageUsed: (float64(vol.UsedBytes) / float64(vol.CapacityBytes)) * 100.0,
 
-						INodes:          vol.INodes,
-						INodesFree:      vol.INodesFree,
-						INodesUsed:      vol.INodesUsed,
-						PercentageIUsed: (float64(vol.INodesUsed.Value()) / float64(vol.INodes.Value())) * 100.0,
+						Inodes:          vol.Inodes,
+						InodesFree:      vol.InodesFree,
+						InodesUsed:      vol.InodesUsed,
+						PercentageIUsed: (float64(vol.InodesUsed) / float64(vol.Inodes)) * 100.0,
 
 						VolumeMountName: vol.Name,
 					}
-
-					// outputCh <- fmt.Sprintf("%s/%s", node.Name, runningPvc.PvcName)
+					outputCh <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", runningPvc.PVCName, node.Name)
 					listOfPvc = append(listOfPvc, runningPvc)
 				}
 			}
