@@ -57,11 +57,11 @@ $(GOACC_BIN):
 
 build:
 	@$(call print, "Building kubectl-df-pv.")
-	$(GOBUILD) -o bin/df-pv $(PKG)/cmd/plugin
+	$(GOBUILD) -o bin/df-pv $(PKG)/cmd/df-pv
 
 install:
 	@$(call print, "Installing kubectl-df-pv.")
-	$(GOINSTALL) $(PKG)/cmd/plugin
+	$(GOINSTALL) $(PKG)/cmd/df-pv
 
 # =======
 # TESTING

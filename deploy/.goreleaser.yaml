@@ -16,7 +16,7 @@ builds:
     - "386"
     env:
       - CGO_ENABLED=0
-    main: cmd/plugin/main.go
+    main: cmd/df-pv/main.go
     ldflags: -s -w
       -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.version={{.Version}}
       -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
