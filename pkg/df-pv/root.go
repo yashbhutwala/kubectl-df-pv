@@ -16,15 +16,16 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 type flagpole struct {
-	kubernetesConfigFlags *genericclioptions.ConfigFlags
+	genericCliConfigFlags *genericclioptions.ConfigFlags
 	outputFormat          string
 }
 
 func setupRootCommand() *cobra.Command {
-	flags := &flagpole{kubernetesConfigFlags: genericclioptions.NewConfigFlags(false)}
+	flags := &flagpole{genericCliConfigFlags: genericclioptions.NewConfigFlags(false)}
 	var rootCmd = &cobra.Command{
 		Use:   "df-pv",
 		Short: "df-pv",
@@ -90,9 +91,9 @@ func setupRootCommand() *cobra.Command {
 					fmt.Sprintf("%s", pvc.PVCName),
 					fmt.Sprintf("%s", pvc.Namespace),
 					fmt.Sprintf("%s", pvc.PodName),
-					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.CapacityBytes, flags.outputFormat)),
-					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.UsedBytes, flags.outputFormat)),
-					fmt.Sprintf("%s", convertQuantityValueToHumanReadableSIUnitString(pvc.AvailableBytes, flags.outputFormat)),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.CapacityBytes, flags.outputFormat)),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.UsedBytes, flags.outputFormat)),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.AvailableBytes, flags.outputFormat)),
 					fmt.Sprintf("%.2f", pvc.PercentageUsed),
 					fmt.Sprintf("%d", pvc.InodesUsed),
 					fmt.Sprintf("%d", pvc.InodesFree),
@@ -117,27 +118,31 @@ func setupRootCommand() *cobra.Command {
 	}
 	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
 
-	flags.kubernetesConfigFlags.AddFlags(rootCmd.Flags())
+	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
 }
 
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-func convertQuantityValueToHumanReadableSIUnitString(quantity *resource.Quantity, suffix string) string {
-	var convertedValue int64
+func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity, suffix string) string {
+	var convertedValue = quantity.Value()
 	switch suffix {
-
-	case "Mi":
-		// https://en.wikipedia.org/wiki/Mebibyte
-		// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
-		convertedValue = quantity.Value() / 1048576
-	case "Gi":
-		// https://en.wikipedia.org/wiki/Gibibyte
-		// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
-		convertedValue = quantity.Value() / 1073741824
 	case "Ki":
 		// https://en.wikipedia.org/wiki/Kibibyte
 		// 1 KiB = 2^10 bytes = 1024 bytes
-		convertedValue = quantity.Value() / 1024
+		convertedValue = convertedValue / 1024
+	case "Mi":
+		// https://en.wikipedia.org/wiki/Mebibyte
+		// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
+		convertedValue = convertedValue / 1048576
+	case "Gi":
+		// https://en.wikipedia.org/wiki/Gibibyte
+		// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
+		convertedValue = convertedValue / 1073741824
+	case "Ti":
+		// https://en.wikipedia.org/wiki/Tebibyte
+		// 1 TiB = 2^40 bytes = 1099511627776 bytes = 1024 gibibytes
+		convertedValue = convertedValue / 1099511627776
+	default:
 	}
 	return fmt.Sprintf("%d%s", convertedValue, suffix)
 }
@@ -253,9 +258,9 @@ type Volume struct {
 }
 
 func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
-	config, err := flags.kubernetesConfigFlags.ToRESTConfig()
+	config, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to read kubeconfig")
+		return nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -271,6 +276,7 @@ func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
 	var listOfPvc []*OutputPVC
 	var jsonConvertedIntoStruct ServerResponseStruct
 
+	// TODO: turn this into a goroutine
 	for _, node := range nodes.Items {
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
@@ -285,7 +291,7 @@ func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
-				desiredNamespace := *flags.kubernetesConfigFlags.Namespace
+				desiredNamespace := *flags.genericCliConfigFlags.Namespace
 				if 0 < len(desiredNamespace){
 					if vol.PvcRef.PvcNamespace != desiredNamespace {
 						continue
@@ -321,4 +327,9 @@ func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
 	}
 
 	return listOfPvc, nil
+}
+
+func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
+	config, err := genericCliConfigFlags.ToRESTConfig()
+	return config, errors.Wrap(err, "failed to read kubeconfig")
 }
