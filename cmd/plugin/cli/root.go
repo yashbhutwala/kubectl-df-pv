@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
@@ -28,9 +26,6 @@ func RootCmd() *cobra.Command {
 		Long:          `.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		PreRun: func(cmd *cobra.Command, args []string) {
-			viper.BindPFlags(cmd.Flags())
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			df := plugin.DisplayFree{}
 
@@ -133,13 +128,8 @@ func RootCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	cobra.OnInitialize(initConfig)
-
 	KubernetesConfigFlags = genericclioptions.NewConfigFlags(false)
 	KubernetesConfigFlags.AddFlags(cmd.Flags())
-
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	return cmd
 }
 
@@ -148,8 +138,4 @@ func InitAndExecute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-func initConfig() {
-	viper.AutomaticEnv()
 }
