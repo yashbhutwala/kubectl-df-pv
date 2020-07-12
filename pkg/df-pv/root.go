@@ -499,20 +499,21 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		res := request.Do(ctx)
 
-		runtimeObj, _ := res.Get()
-		// if err != nil {
-		// 	return errors.Wrapf(err, "failed to get response body")
-		// }
-		jsonText, err := json.MarshalIndent(runtimeObj, "", "  ")
+		responseRawArrayOfBytes, err := res.Raw()
+		if err != nil {
+			return errors.Wrapf(err, "failed to get stats from node")
+		}
+
+		// for trace logging only
+		var nodeRespBody interface{}
+		_ = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
+		// log.Tracef("response from node: %+v\n", nodeRespBody)
+		jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
 		if err != nil {
 			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
 		}
 		log.Tracef("response from node: %s\n", jsonText)
 
-		responseRawArrayOfBytes, err := res.Raw()
-		if err != nil {
-			return errors.Wrapf(err, "failed to get stats from node")
-		}
 		var jsonConvertedIntoStruct ServerResponseStruct
 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
 		if err != nil {
