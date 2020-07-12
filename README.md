@@ -49,7 +49,7 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 &#9745; human readable output as default (using IEC format)
 
-&#9745; color based on usage (i.e.: > 75% = red; > 50% = magenta; > 25% = yellow; default = green)
+&#9745; color based on usage [red: > 75% (too high); yellow: < 25% (too low); green: >= 25 and <= 75 (OK)]
 
 &#9746; sort-by flag
 

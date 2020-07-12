@@ -47,7 +47,7 @@ func setupRootCommand() *cobra.Command {
 
 It autoconverts all "sizes" to IEC values (see: https://en.wikipedia.org/wiki/Binary_prefix and https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory)
 
-It colors the values based on "severity" (i.e.: > 75% = red; > 50% = magenta; > 25% = yellow; default = green)`,
+It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (too low); green: >= 25 and <= 75 (OK)]`,
 		Args: cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRootCommand(flags)
@@ -86,17 +86,18 @@ func runRootCommand(flags *flagpole) error {
 }
 
 func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
-	// https://github.com/jedib0t/go-pretty/tree/master/table#table
+	// https://github.com/jedib0t/go-pretty/tree/v6.0.4/table
 	t := table.NewWriter()
 
 	t.AppendHeader(table.Row{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
+	hiWhiteColor := text.FgHiWhite
 	for _, pvcRow := range sliceOfOutputRowPVC {
 		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
 		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
 		t.AppendRow([]interface{}{
-			fmt.Sprintf("%s", pvcRow.PVCName),
-			fmt.Sprintf("%s", pvcRow.Namespace),
-			fmt.Sprintf("%s", pvcRow.PodName),
+			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
+			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
+			hiWhiteColor.Sprintf("%s", pvcRow.PodName),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
@@ -107,10 +108,11 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 		})
 	}
 
-	// https://github.com/jedib0t/go-pretty/blob/master/table/style.go
+	// https://github.com/jedib0t/go-pretty/blob/v6.0.4/table/style.go
 	styleBold := table.StyleBold
 	styleBold.Options = table.OptionsNoBordersAndSeparators
 	t.SetStyle(styleBold)
+	t.Style().Color.Header = text.Colors{hiWhiteColor, text.Bold}
 	// t.Style().Options.SeparateRows = true
 	// t.SetAutoIndex(true)
 	// t.SetOutputMirror(os.Stdout)
@@ -120,9 +122,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 	if percentageUsed > 75 {
 		return text.FgHiRed
-	} else if percentageUsed > 50 {
-		return text.FgHiMagenta
-	} else if percentageUsed > 25 {
+	} else if percentageUsed < 25 {
 		return text.FgHiYellow
 	} else {
 		return text.FgHiGreen
