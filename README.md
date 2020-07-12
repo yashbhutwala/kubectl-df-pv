@@ -56,7 +56,7 @@ kubectl df-pv
 
 ### Flags
 
-```shell
+```shell script
 > kubectl df-pv --help
 
 df-pv emulates Unix style df for persistent volumes w/ ability to filter by namespace
@@ -72,6 +72,14 @@ Flags:
   -h, --help               help for df-pv
   -n, --namespace string   if present, the namespace scope for this CLI request (default is all namespaces)
   -v, --verbosity string   log level; one of [info, debug, trace, warn, error, fatal, panic] (default "info")
+```
+
+### Other useful commands
+
+#### enable trace logging, but output to a file
+
+```shell script
+df-pv -v trace 2> trace.log
 ```
 
 ## Tested
@@ -96,19 +104,25 @@ Flags:
 
 ## TODO Features
 
+### Yet to be completed
+
+&#9746; sort-by flag
+
+&#9746; exclude namespaces
+
+&#9746; only show a specific colored result ("red", "yellow", "green")
+
+### Completed
+
 &#9745; `df` for all Persistent Volumes in the cluster
 
 &#9745; human readable output as default (using IEC format)
 
 &#9745; color based on usage [red: > 75% (too high); yellow: < 25% (too low); green: >= 25 and <= 75 (OK)]
 
-&#9746; sort-by flag
+&#9745; print PV name
 
-&#9746; print PV name (right now, it prints the PVC name)
-
-&#9746; exclude namespaces
-
-&#9746; only show a specific colored result ("red", "yellow", "green")
+&#9745; print volume mount name
 
 ## Motivation
 

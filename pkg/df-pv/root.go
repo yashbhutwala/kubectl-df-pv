@@ -89,15 +89,17 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 	// https://github.com/jedib0t/go-pretty/tree/v6.0.4/table
 	t := table.NewWriter()
 
-	t.AppendHeader(table.Row{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
+	t.AppendHeader(table.Row{"Namespace", "PVC Name", "PV Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 	hiWhiteColor := text.FgHiWhite
 	for _, pvcRow := range sliceOfOutputRowPVC {
 		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
 		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
 		t.AppendRow([]interface{}{
-			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
 			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
+			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
+			hiWhiteColor.Sprintf("%s", pvcRow.PVName),
 			hiWhiteColor.Sprintf("%s", pvcRow.PodName),
+			hiWhiteColor.Sprintf("%s", pvcRow.VolumeMountName),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
@@ -321,22 +323,19 @@ func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantit
 // }
 
 type OutputRowPVC struct {
-	PodName   string `json:"podName"`
-	Namespace string `json:"namespace"`
-
-	PVCName string `json:"pvcName"`
-
-	AvailableBytes *resource.Quantity `json:"availableBytes"`
-	CapacityBytes  *resource.Quantity `json:"capacityBytes"`
-	UsedBytes      *resource.Quantity `json:"usedBytes"`
-	PercentageUsed float64
-
+	Namespace       string             `json:"namespace"`
+	PVCName         string             `json:"pvcName"`
+	PVName          string             `json:"pvName"`
+	PodName         string             `json:"podName"`
+	VolumeMountName string             `json:"volumeMountName"`
+	AvailableBytes  *resource.Quantity `json:"availableBytes"`
+	CapacityBytes   *resource.Quantity `json:"capacityBytes"`
+	UsedBytes       *resource.Quantity `json:"usedBytes"`
+	PercentageUsed  float64
 	InodesFree      int64 `json:"inodesFree"`
 	Inodes          int64 `json:"inodes"`
 	InodesUsed      int64 `json:"inodesUsed"`
 	PercentageIUsed float64
-
-	VolumeMountName string `json:"volumeMountName"`
 }
 
 type ServerResponseStruct struct {
@@ -506,13 +505,17 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 
 		// for trace logging only
 		var nodeRespBody interface{}
-		_ = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
+		err = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
+		if err != nil {
+			return errors.Wrapf(err, "unable to unmarshal json into an interface (this really shouldn't happen)")
+		}
 		// log.Tracef("response from node: %+v\n", nodeRespBody)
-		jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
+		jsonText, err := json.Marshal(nodeRespBody)
+		// jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
 		if err != nil {
 			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
 		}
-		log.Tracef("response from node: %s\n", jsonText)
+		log.Tracef("response from node: %s", jsonText)
 
 		var jsonConvertedIntoStruct ServerResponseStruct
 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
@@ -522,7 +525,7 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
-				outputRowPVC := GetOutputRowPVCFromPodAndVolume(pod, vol, desiredNamespace)
+				outputRowPVC := GetOutputRowPVCFromPodAndVolume(ctx, clientset, pod, vol, desiredNamespace)
 				if nil == outputRowPVC {
 					log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
 					continue
@@ -539,7 +542,7 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 	return nil
 }
 
-func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace string) *OutputRowPVC {
+func GetOutputRowPVCFromPodAndVolume(ctx context.Context, clientset *kubernetes.Clientset, pod *Pod, vol *Volume, desiredNamespace string) *OutputRowPVC {
 	var outputRowPVC *OutputRowPVC
 
 	if 0 < len(desiredNamespace) {
@@ -551,22 +554,28 @@ func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace str
 	}
 
 	if 0 < len(vol.PvcRef.PvcName) {
+		namespace := pod.PodRef.Namespace
+		pvcName := vol.PvcRef.PvcName
+		pvName, _ := GetPVNameFromPVCName(ctx, clientset, namespace, pvcName)
+		// if err != nil {
+		// 	ctx.Err()
+		// 	return errors.Wrapf(err, "unable to get PV name from the PVC name")
+		// }
+
 		outputRowPVC = &OutputRowPVC{
-			PodName:   pod.PodRef.Name,
-			Namespace: pod.PodRef.Namespace,
-
-			PVCName:        vol.PvcRef.PvcName,
-			AvailableBytes: resource.NewQuantity(vol.AvailableBytes, resource.BinarySI),
-			CapacityBytes:  resource.NewQuantity(vol.CapacityBytes, resource.BinarySI),
-			UsedBytes:      resource.NewQuantity(vol.UsedBytes, resource.BinarySI),
-			PercentageUsed: (float64(vol.UsedBytes) / float64(vol.CapacityBytes)) * 100.0,
-
+			Namespace:       namespace,
+			PVCName:         pvcName,
+			PVName:          pvName,
+			PodName:         pod.PodRef.Name,
+			VolumeMountName: vol.Name,
+			AvailableBytes:  resource.NewQuantity(vol.AvailableBytes, resource.BinarySI),
+			CapacityBytes:   resource.NewQuantity(vol.CapacityBytes, resource.BinarySI),
+			UsedBytes:       resource.NewQuantity(vol.UsedBytes, resource.BinarySI),
+			PercentageUsed:  (float64(vol.UsedBytes) / float64(vol.CapacityBytes)) * 100.0,
 			Inodes:          vol.Inodes,
 			InodesFree:      vol.InodesFree,
 			InodesUsed:      vol.InodesUsed,
 			PercentageIUsed: (float64(vol.InodesUsed) / float64(vol.Inodes)) * 100.0,
-
-			VolumeMountName: vol.Name,
 		}
 	}
 	return outputRowPVC
@@ -580,6 +589,16 @@ func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace str
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
 	log.Tracef("getting a list of all nodes")
 	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+}
+
+func GetPVNameFromPVCName(ctx context.Context, clientset *kubernetes.Clientset, namespace string, pvcName string) (string, error) {
+	var pvName string
+	pvc, err := clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{})
+	if err != nil {
+		return pvName, err
+	}
+	pvName = pvc.Spec.VolumeName
+	return pvName, err
 }
 
 func KubeConfigPath() (string, error) {
