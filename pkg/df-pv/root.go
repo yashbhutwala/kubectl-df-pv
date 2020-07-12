@@ -34,29 +34,29 @@ func InitAndExecute() {
 }
 
 type flagpole struct {
-	// outputFormat string
 	logLevel  string
 	namespace string
 }
 
 func setupRootCommand() *cobra.Command {
-	// flags := &flagpole{genericCliConfigFlags: genericclioptions.NewConfigFlags(false)}
 	flags := &flagpole{}
 	var rootCmd = &cobra.Command{
 		Use:   "df-pv",
-		Short: "df-pv",
-		Long:  `df-pv`,
-		Args:  cobra.MaximumNArgs(0),
+		Short: "df-pv emulates Unix style df for persistent volumes",
+		Long: `df-pv emulates Unix style df for persistent volumes w/ ability to filter by namespace
+
+It autoconverts all "sizes" to IEC values (see: https://en.wikipedia.org/wiki/Binary_prefix and https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory)
+
+It colors the values based on "severity" (i.e.: > 75% = red; > 50% = magenta; > 25% = yellow; default = green)`,
+		Args: cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRootCommand(flags)
 		},
 	}
 
 	rootCmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "if present, the namespace scope for this CLI request (default is all namespaces)")
-	// rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 
-	// flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
 }
 
