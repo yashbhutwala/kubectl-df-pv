@@ -11,6 +11,7 @@ import (
 	// "github.com/gookit/color"
 	// . "github.com/logrusorgru/aurora"
 	// "k8s.io/cli-runtime/pkg/printers"
+	// "github.com/olekukonko/tablewriter"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 	"github.com/pkg/errors"
@@ -71,15 +72,24 @@ func runRootCommand(flags *flagpole) error {
 		return errors.Cause(err)
 	}
 
-	PrintUsingGoPretty(sliceOfOutputRowPVC)
+	if nil == sliceOfOutputRowPVC || 0 > len(sliceOfOutputRowPVC) {
+		ns := flags.namespace
+		if 0 == len(ns) {
+			ns = "all"
+		}
+		log.Infof("Either no volumes found in namespace/s: '%s' or the storage provisioner used for the volumes does not publish metrics to kubelet", ns)
+	} else {
+		PrintUsingGoPretty(sliceOfOutputRowPVC)
+	}
+
 	return nil
 }
 
 func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
+	// https://github.com/jedib0t/go-pretty/tree/master/table#table
 	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 
+	t.AppendHeader(table.Row{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 	for _, pvcRow := range sliceOfOutputRowPVC {
 		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
 		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
@@ -97,12 +107,14 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 		})
 	}
 
-	// t.SetAutoIndex(true)
+	// https://github.com/jedib0t/go-pretty/blob/master/table/style.go
 	styleBold := table.StyleBold
 	styleBold.Options = table.OptionsNoBordersAndSeparators
 	t.SetStyle(styleBold)
 	// t.Style().Options.SeparateRows = true
-	t.Render()
+	// t.SetAutoIndex(true)
+	// t.SetOutputMirror(os.Stdout)
+	fmt.Printf("\n%s\n\n", t.Render())
 }
 
 func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
@@ -457,8 +469,9 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 
 func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
 	for node := range nodeChan {
+		log.Tracef("connecting to node: %s", node.Name)
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
+		responseRawArrayOfBytes, err := request.DoRaw(ctx)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get stats from node")
 		}
@@ -473,6 +486,7 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 			for _, vol := range pod.ListOfVolumes {
 				outputRowPVC := GetOutputRowPVCFromPodAndVolume(pod, vol, desiredNamespace)
 				if nil == outputRowPVC {
+					log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
 					continue
 				}
 				select {
@@ -493,6 +507,8 @@ func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace str
 	if 0 < len(desiredNamespace) {
 		if vol.PvcRef.PvcNamespace != desiredNamespace {
 			return nil
+		} else {
+			log.Debugf("restricting findings to namespace: '%s'", desiredNamespace)
 		}
 	}
 
@@ -524,10 +540,12 @@ func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace str
 // }
 
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
+	log.Tracef("getting a list of all nodes")
 	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 }
 
 func KubeConfigPath() (string, error) {
+	log.Debugf("getting kubeconfig path based on user's home dir")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", errors.Wrapf(err, "unable to get home dir")
