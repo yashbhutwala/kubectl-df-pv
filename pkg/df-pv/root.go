@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -14,20 +15,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type flagpole struct {
-	genericCliConfigFlags *genericclioptions.ConfigFlags
-	outputFormat          string
-	logLevel              string
+	outputFormat string
+	logLevel     string
+	namespace    string
 }
 
 func setupRootCommand() *cobra.Command {
-	flags := &flagpole{genericCliConfigFlags: genericclioptions.NewConfigFlags(false)}
+	// flags := &flagpole{genericCliConfigFlags: genericclioptions.NewConfigFlags(false)}
+	flags := &flagpole{}
 	var rootCmd = &cobra.Command{
 		Use:   "df-pv",
 		Short: "df-pv",
@@ -100,10 +101,12 @@ func setupRootCommand() *cobra.Command {
 			return nil
 		},
 	}
+
+	rootCmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "if present, the namespace scope for this CLI request (default is all namespaces)")
 	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 
-	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
+	// flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
 }
 
@@ -243,12 +246,24 @@ type Volume struct {
 }
 
 func ListPVCs(flags *flagpole) ([]*OutputRow, error) {
-	config, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
+	// kubeConfig, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	kubeConfigPath, err := KubeConfigPath()
 	if err != nil {
 		return nil, err
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	log.Debugf("instantiating k8s client from config path: '%s'", kubeConfigPath)
+	kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	// kubeConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to build config from flags")
+	}
+
+	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create clientset")
 	}
@@ -258,7 +273,9 @@ func ListPVCs(flags *flagpole) ([]*OutputRow, error) {
 		return nil, errors.Wrapf(err, "failed to list nodes")
 	}
 
-	desiredNamespace := *flags.genericCliConfigFlags.Namespace
+	// desiredNamespace := *flags.genericCliConfigFlags.Namespace
+	desiredNamespace := flags.namespace
+
 	ctx := context.TODO()
 	return GetSliceOfOutputRow(ctx, clientset, nodes, desiredNamespace)
 }
@@ -365,11 +382,19 @@ func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *Out
 	return outputRow
 }
 
-func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
-	config, err := genericCliConfigFlags.ToRESTConfig()
-	return config, errors.Wrap(err, "failed to read kubeconfig")
-}
+// func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
+// 	config, err := genericCliConfigFlags.ToRESTConfig()
+// 	return config, errors.Wrap(err, "failed to read kubeconfig")
+// }
 
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
 	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+}
+
+func KubeConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.Wrapf(err, "unable to get home dir")
+	}
+	return path.Join(home, ".kube", "config"), nil
 }
