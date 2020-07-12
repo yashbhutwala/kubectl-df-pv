@@ -4,39 +4,56 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 ## Requirements
 
-- [ ] `api-server` has `api/v1/nodes/` endpoint enabled
-- [ ] Appropriate RBAC.  This utility is meant for `cluster-admin` like user; specifically, you need a service account with enough RBAC privileges to access `api/v1/nodes/` from the `api-server`.
-- [ ] Using a storage provisioner that populates pv metrics in a compatible manner (see what's been [tested](##Tested) below)
+&#9745; `kube-apiserver` has `api/v1/nodes/` endpoint enabled
+
+&#9745; Appropriate RBAC.  This utility is meant for `cluster-admin` like user; specifically, you need a service account with enough RBAC privileges to access `api/v1/nodes/` from the `kube-apiserver`.
+
+&#9745; Using a storage provisioner that populates pv metrics in a compatible manner (see what's been [tested](##Tested) below)
 
 ## Quick Start
 
 ```shell script
-curl https://krew.sh/df-pv | bash
-# . ~/.bashrc   # run if you use bash shell
-# . ~/.zshrc    # run if you use zsh shell
-kubectl df-pv
+> curl https://krew.sh/df-pv | bash
+> # . ~/.bashrc   # run if you use bash shell
+> # . ~/.zshrc    # run if you use zsh shell
+> kubectl df-pv
 ```
 
 ## Example
 
-![example output](doc/example-output.png)
+![example output](doc/df-pv-output.png)
 
 ## Tested
 
-- [x] `kubeadm` configured bare-metal cluster with `rook-ceph.rbd.csi.ceph.com` dynamic provisioner
-- [x] GKE with `kubernetes.io/gce-pd` dynamic provisioner
-- [ ] minikube
-- [ ] kind
-- [ ] EKS
-- [ ] AKS
+### Works on
+
+&#9745; **`kubeadm`** configured bare-metal cluster (**`rook-ceph.rbd.csi.ceph.com`** dynamic provisioner)
+
+&#9745; **`GKE`** (**`kubernetes.io/gce-pd`** dynamic provisioner)
+
+### Does not work due to storage provisioner
+
+&#9746; **`kind`** ([**`rancher/local-path-provisioner`** dynamic provisioner](https://github.com/rancher/local-path-provisioner))
+
+&#9746; **`minikube`** ([**`gcr.io/k8s-minikube/storage-provisioner`** minikube-hostpath dynamic provisioner](https://minikube.sigs.k8s.io/docs/handbook/persistent_volumes/))
+
+### TODO
+
+[ ] EKS
+
+[ ] AKS
 
 ## TODO Features
 
-- [x] `df` for all Persistent Volumes in the cluster
-- [ ] `df -h`; `df -k`, `df -l` (make `df -h` the default)
-- [ ] color based on usage (i.e.: if greater than 75%, red)
-- [ ] sort-by flag
-- [ ] print PV name (right now, it prints the PVC name)
+&#9745; `df` for all Persistent Volumes in the cluster
+
+&#9745; human readable output as default (using IEC format)
+
+&#9745; color based on usage (i.e.: > 75% = red; > 50% = magenta; > 25% = yellow; default = green)
+
+&#9746; sort-by flag
+
+&#9746; print PV name (right now, it prints the PVC name)
 
 ## Motivation
 
