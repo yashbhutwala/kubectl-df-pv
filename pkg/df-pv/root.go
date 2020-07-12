@@ -23,10 +23,18 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+func InitAndExecute() {
+	rootCmd := setupRootCommand()
+	if err := errors.Wrapf(rootCmd.Execute(), "run df-pv root command"); err != nil {
+		log.Fatalf("unable to run root command: %+v", err)
+		os.Exit(1)
+	}
+}
+
 type flagpole struct {
 	// outputFormat string
-	logLevel     string
-	namespace    string
+	logLevel  string
+	namespace string
 }
 
 func setupRootCommand() *cobra.Command {
@@ -38,73 +46,7 @@ func setupRootCommand() *cobra.Command {
 		Long:  `df-pv`,
 		Args:  cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-
-			logLevel, _ := log.ParseLevel(flags.logLevel)
-			log.SetLevel(logLevel)
-			log.SetFormatter(&log.TextFormatter{
-				FullTimestamp: true,
-			})
-
-			listOfRunningPvc, err := ListPVCs(flags)
-			if err != nil {
-				return errors.Cause(err)
-			}
-
-			var columns = []metav1.TableColumnDefinition{
-				{Name: "PVC", Type: "string"},
-				{Name: "Namespace", Type: "string"},
-				{Name: "Pod", Type: "string"},
-				{Name: "Size", Type: "string"},
-				{Name: "Used", Type: "string"},
-				{Name: "Available", Type: "string"},
-				{Name: "PercentUsed", Type: "number", Format: "float"},
-				{Name: "iused", Type: "integer", Format: "int32"},
-				{Name: "ifree", Type: "integer", Format: "int32"},
-				{Name: "Percentiused", Type: "number", Format: "float"},
-			}
-			var rows []metav1.TableRow
-
-			colorFmt := color.New(color.FgWhite)
-
-			for _, pvc := range listOfRunningPvc {
-
-				pvcPercentageUsed := pvc.PercentageUsed
-				if pvcPercentageUsed > 75 {
-					colorFmt = color.Style{color.Red}
-				} else if pvcPercentageUsed > 50 {
-					colorFmt = color.Style{color.Magenta}
-				} else if pvcPercentageUsed > 25 {
-					colorFmt = color.Style{color.Yellow}
-				}
-
-				thisRow := metav1.TableRow{Cells: []interface{}{
-					fmt.Sprintf("%s", pvc.PVCName),
-					fmt.Sprintf("%s", pvc.Namespace),
-					fmt.Sprintf("%s", pvc.PodName),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.CapacityBytes)),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.UsedBytes)),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.AvailableBytes)),
-					colorFmt.Sprintf("%.2f", pvcPercentageUsed),
-					fmt.Sprintf("%d", pvc.InodesUsed),
-					fmt.Sprintf("%d", pvc.InodesFree),
-					fmt.Sprintf("%.2f", pvc.PercentageIUsed),
-				}}
-				rows = append(rows, thisRow)
-			}
-
-			table := &metav1.Table{
-				ColumnDefinitions: columns,
-				Rows:              rows,
-			}
-			out := bytes.NewBuffer([]byte{})
-			printer := printers.NewTablePrinter(printers.PrintOptions{
-
-				SortBy: "PVC",
-			})
-			printer.PrintObj(table, out)
-			fmt.Printf("\n%s\n", out)
-
-			return nil
+			return runRootCommand(flags)
 		},
 	}
 
@@ -114,6 +56,92 @@ func setupRootCommand() *cobra.Command {
 
 	// flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
+}
+
+func runRootCommand(flags *flagpole) error {
+	logLevel, _ := log.ParseLevel(flags.logLevel)
+	log.SetLevel(logLevel)
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
+
+	sliceOfOutputRowPVC, err := GetSliceOfOutputRowPVC(flags)
+	if err != nil {
+		return errors.Cause(err)
+	}
+
+	var columns = []metav1.TableColumnDefinition{
+		{Name: "PVC", Type: "string"},
+		{Name: "Namespace", Type: "string"},
+		{Name: "Pod", Type: "string"},
+		{Name: "Size", Type: "string"},
+		{Name: "Used", Type: "string"},
+		{Name: "Available", Type: "string"},
+		{Name: "PercentUsed", Type: "number", Format: "float"},
+		{Name: "iused", Type: "integer", Format: "int32"},
+		{Name: "ifree", Type: "integer", Format: "int32"},
+		{Name: "Percentiused", Type: "number", Format: "float"},
+	}
+	var rows []metav1.TableRow
+
+	colorFmt := color.New()
+
+	for _, pvcRow := range sliceOfOutputRowPVC {
+
+		colorFmt = color.Style{color.FgWhite}
+		pvcPercentageUsedVal := pvcRow.PercentageUsed
+		// pvcPercentageUsedString := fmt.Sprintf("\033[31m%.2f\033[0m", pvcPercentageUsedVal)
+
+		if pvcPercentageUsedVal > 75 {
+			colorFmt = color.Style{color.Red}
+		} else if pvcPercentageUsedVal > 50 {
+			colorFmt = color.Style{color.Magenta}
+		} else if pvcPercentageUsedVal > 25 {
+			colorFmt = color.Style{color.Yellow}
+		}
+
+		// var (
+		// 	Reset  = "\033[0m"
+		// 	Red    = "\033[31m"
+		// 	Green  = "\033[32m"
+		// 	Yellow = "\033[33m"
+		// 	Blue   = "\033[34m"
+		// 	Purple = "\033[35m"
+		// 	Cyan   = "\033[36m"
+		// 	Gray   = "\033[37m"
+		// 	White  = "\033[97m"
+		// )
+		// if pvcPercentageUsedVal > 75 {
+		// 	pvcPercentageUsedString = fmt.Sprintf("\033[31m%s\033[0m", pvcPercentageUsedString)
+		// }
+
+		thisRow := metav1.TableRow{Cells: []interface{}{
+			fmt.Sprintf("%s", pvcRow.PVCName),
+			fmt.Sprintf("%s", pvcRow.Namespace),
+			fmt.Sprintf("%s", pvcRow.PodName),
+			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
+			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
+			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
+			colorFmt.Sprintf("%.2f", pvcPercentageUsedVal),
+			fmt.Sprintf("%d", pvcRow.InodesUsed),
+			fmt.Sprintf("%d", pvcRow.InodesFree),
+			fmt.Sprintf("%.2f", pvcRow.PercentageIUsed),
+		}}
+		rows = append(rows, thisRow)
+	}
+
+	table := &metav1.Table{
+		ColumnDefinitions: columns,
+		Rows:              rows,
+	}
+	out := bytes.NewBuffer([]byte{})
+	printer := printers.NewTablePrinter(printers.PrintOptions{
+		SortBy: "PVC",
+	})
+	printer.PrintObj(table, out)
+	fmt.Printf("\n%s\n", out)
+
+	return nil
 }
 
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
@@ -167,15 +195,7 @@ func ConvertQuantityValueToHumanReadableIECStringFromSuffix(quantity *resource.Q
 	return fmt.Sprintf("%d%s", convertedValue, suffix)
 }
 
-func InitAndExecute() {
-	rootCmd := setupRootCommand()
-	if err := errors.Wrapf(rootCmd.Execute(), "run df-pv root command"); err != nil {
-		log.Fatalf("unable to run root command: %+v", err)
-		os.Exit(1)
-	}
-}
-
-type OutputRow struct {
+type OutputRowPVC struct {
 	PodName   string `json:"podName"`
 	Namespace string `json:"namespace"`
 
@@ -277,7 +297,10 @@ type Volume struct {
 	} `json:"pvcRef"`
 }
 
-func ListPVCs(flags *flagpole) ([]*OutputRow, error) {
+func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
+
+	ctx := context.Background()
+
 	// kubeConfig, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	// if err != nil {
 	// 	return nil, err
@@ -308,16 +331,10 @@ func ListPVCs(flags *flagpole) ([]*OutputRow, error) {
 	// desiredNamespace := *flags.genericCliConfigFlags.Namespace
 	desiredNamespace := flags.namespace
 
-	ctx := context.TODO()
-	return GetSliceOfOutputRow(ctx, clientset, nodes, desiredNamespace)
-}
-
-func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string) ([]*OutputRow, error) {
-
 	g, ctx := errgroup.WithContext(ctx)
 
 	nodeChan := make(chan corev1.Node)
-	outputRowChan := make(chan *OutputRow)
+	outputRowPVCChan := make(chan *OutputRowPVC)
 
 	nodeItems := nodes.Items
 	g.Go(func() error {
@@ -335,23 +352,23 @@ func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, n
 	const numWorkers = 3
 	for w := 1; w <= numWorkers; w++ {
 		g.Go(func() error {
-			return GetOutputRowFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowChan)
+			return GetOutputRowPVCFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowPVCChan)
 		})
 	}
 
 	go func() {
 		g.Wait()
-		close(outputRowChan)
+		close(outputRowPVCChan)
 	}()
 
-	var sliceOfOutputRow []*OutputRow
-	for outputRow := range outputRowChan {
-		sliceOfOutputRow = append(sliceOfOutputRow, outputRow)
+	var sliceOfOutputRowPVC []*OutputRowPVC
+	for outputRowPVC := range outputRowPVCChan {
+		sliceOfOutputRowPVC = append(sliceOfOutputRowPVC, outputRowPVC)
 	}
-	return sliceOfOutputRow, g.Wait()
+	return sliceOfOutputRowPVC, g.Wait()
 }
 
-func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow) error {
+func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
 	for node := range nodeChan {
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
@@ -367,15 +384,15 @@ func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clients
 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
-				outputRow := GetOutputRowFromVolume(pod, vol, desiredNamespace)
-				if nil == outputRow {
+				outputRowPVC := GetOutputRowPVCFromPodAndVolume(pod, vol, desiredNamespace)
+				if nil == outputRowPVC {
 					continue
 				}
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case outputRowChan <- outputRow:
-					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
+				case outputRowPVCChan <- outputRowPVC:
+					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
 				}
 			}
 		}
@@ -383,8 +400,8 @@ func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clients
 	return nil
 }
 
-func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *OutputRow {
-	var outputRow *OutputRow
+func GetOutputRowPVCFromPodAndVolume(pod *Pod, vol *Volume, desiredNamespace string) *OutputRowPVC {
+	var outputRowPVC *OutputRowPVC
 
 	if 0 < len(desiredNamespace) {
 		if vol.PvcRef.PvcNamespace != desiredNamespace {
@@ -393,7 +410,7 @@ func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *Out
 	}
 
 	if 0 < len(vol.PvcRef.PvcName) {
-		outputRow = &OutputRow{
+		outputRowPVC = &OutputRowPVC{
 			PodName:   pod.PodRef.Name,
 			Namespace: pod.PodRef.Namespace,
 
@@ -411,7 +428,7 @@ func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *Out
 			VolumeMountName: vol.Name,
 		}
 	}
-	return outputRow
+	return outputRowPVC
 }
 
 // func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
