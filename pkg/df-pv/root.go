@@ -259,7 +259,7 @@ type Volume struct {
 	} `json:"pvcRef"`
 }
 
-func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputRow, error) {
+func ListPVCs(flags *flagpole, outStrChan chan string) ([]*OutputRow, error) {
 	config, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	if err != nil {
 		return nil, err
@@ -277,54 +277,50 @@ func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputRow, error) {
 
 	desiredNamespace := *flags.genericCliConfigFlags.Namespace
 	ctx := context.TODO()
-	return GoProduceOutputRow(ctx, clientset, nodes, desiredNamespace)
+	return GetSliceOfOutputRow(ctx, clientset, nodes, desiredNamespace, outStrChan)
 }
 
-func GoProduceOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string) ([]*OutputRow, error) {
+func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string, outStrChan chan string) ([]*OutputRow, error) {
 
 	g, ctx := errgroup.WithContext(ctx)
 
+	nodeChan := make(chan corev1.Node)
 	outputRowChan := make(chan *OutputRow)
 
 	nodeItems := nodes.Items
 	g.Go(func() error {
-		defer close(outputRowChan)
+		defer close(nodeChan)
 		for _, node := range nodeItems {
-			err := GetOutputRowFromNode(ctx, clientset, node, desiredNamespace, outputRowChan)
-			if err != nil {
-				return err
+			select {
+			case nodeChan <- node:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 		return nil
 	})
 
-	// nodeChan := make(chan corev1.Node)
-	// for w := 1; w <= 3; w++ {
-	// 	g.Go(func() error {
-	// 		// defer func(){
-	// 		// 	if idx == (len(nodeItems) - 1) {
-	// 		// 		close(outputRowChan)
-	// 		// 	}
-	// 		// }()
-	// 		return GetOutputRowFromNode(ctx, clientset, nodeChan, desiredNamespace, outputRowChan)
-	// 	})
-	// }
-	// for _, node := range nodeItems {
-	// 	nodeChan <- node
-	// }
-	// close(nodeChan)
+	const numWorkers = 3
+	for w := 1; w <= numWorkers; w++ {
+		g.Go(func() error {
+			return GetOutputRowFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowChan, outStrChan)
+		})
+	}
+
+	go func() {
+		g.Wait()
+		close(outputRowChan)
+	}()
 
 	var sliceOfOutputRow []*OutputRow
-	g.Go(func() error {
-		for outputRow := range outputRowChan {
-			sliceOfOutputRow = append(sliceOfOutputRow, outputRow)
-		}
-		return nil
-	})
+	for outputRow := range outputRowChan {
+		sliceOfOutputRow = append(sliceOfOutputRow, outputRow)
+	}
 	return sliceOfOutputRow, g.Wait()
 }
 
-func GetOutputRowFromNode(ctx context.Context, clientset *kubernetes.Clientset, node corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow) error {
+func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow, outStrChan chan string) error {
+	for node := range nodeChan {
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
 		if err != nil {
@@ -340,24 +336,19 @@ func GetOutputRowFromNode(ctx context.Context, clientset *kubernetes.Clientset, 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
 				outputRow := GetOutputRowFromVolume(pod, vol, desiredNamespace)
-				if nil == outputRow {
+				if nil == outputRow{
 					continue
-				} else {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case outputRowChan <- outputRow:
-						// outputCh <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
-						// fmt.Printf("Got metrics for pvc '%s' from node: '%s'\n", outputRow.PVCName, node.Name)
-					}
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case outputRowChan <- outputRow:
+					outStrChan <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
 				}
 			}
 		}
+	}
 	return nil
-}
-
-func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
-	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 }
 
 func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *OutputRow {
@@ -394,4 +385,8 @@ func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *Out
 func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
 	config, err := genericCliConfigFlags.ToRESTConfig()
 	return config, errors.Wrap(err, "failed to read kubeconfig")
+}
+
+func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
+	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 }
