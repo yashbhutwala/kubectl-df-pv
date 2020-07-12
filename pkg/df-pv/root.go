@@ -1,7 +1,6 @@
 package df_pv
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,8 +8,11 @@ import (
 	"path"
 
 	// "github.com/fatih/color"
+	// "github.com/gookit/color"
 	// . "github.com/logrusorgru/aurora"
-	"github.com/gookit/color"
+	// "k8s.io/cli-runtime/pkg/printers"
+	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/text"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -18,7 +20,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -70,79 +71,165 @@ func runRootCommand(flags *flagpole) error {
 		return errors.Cause(err)
 	}
 
-	var columns = []metav1.TableColumnDefinition{
-		{Name: "PVC", Type: "string"},
-		{Name: "Namespace", Type: "string"},
-		{Name: "Pod", Type: "string"},
-		{Name: "Size", Type: "string"},
-		{Name: "Used", Type: "string"},
-		{Name: "Available", Type: "string"},
-		{Name: "PercentUsed", Type: "number", Format: "float"},
-		{Name: "iused", Type: "integer", Format: "int32"},
-		{Name: "ifree", Type: "integer", Format: "int32"},
-		{Name: "Percentiused", Type: "number", Format: "float"},
-	}
-	var rows []metav1.TableRow
+	PrintUsingGoPretty(sliceOfOutputRowPVC)
+	return nil
+}
 
-	colorFmt := color.New()
+func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 
 	for _, pvcRow := range sliceOfOutputRowPVC {
-
-		colorFmt = color.Style{color.FgWhite}
-		pvcPercentageUsedVal := pvcRow.PercentageUsed
-		// pvcPercentageUsedString := fmt.Sprintf("\033[31m%.2f\033[0m", pvcPercentageUsedVal)
-
-		if pvcPercentageUsedVal > 75 {
-			colorFmt = color.Style{color.Red}
-		} else if pvcPercentageUsedVal > 50 {
-			colorFmt = color.Style{color.Magenta}
-		} else if pvcPercentageUsedVal > 25 {
-			colorFmt = color.Style{color.Yellow}
-		}
-
-		// var (
-		// 	Reset  = "\033[0m"
-		// 	Red    = "\033[31m"
-		// 	Green  = "\033[32m"
-		// 	Yellow = "\033[33m"
-		// 	Blue   = "\033[34m"
-		// 	Purple = "\033[35m"
-		// 	Cyan   = "\033[36m"
-		// 	Gray   = "\033[37m"
-		// 	White  = "\033[97m"
-		// )
-		// if pvcPercentageUsedVal > 75 {
-		// 	pvcPercentageUsedString = fmt.Sprintf("\033[31m%s\033[0m", pvcPercentageUsedString)
-		// }
-
-		thisRow := metav1.TableRow{Cells: []interface{}{
+		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
+		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
+		t.AppendRow([]interface{}{
 			fmt.Sprintf("%s", pvcRow.PVCName),
 			fmt.Sprintf("%s", pvcRow.Namespace),
 			fmt.Sprintf("%s", pvcRow.PodName),
-			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
-			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
-			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
-			colorFmt.Sprintf("%.2f", pvcPercentageUsedVal),
-			fmt.Sprintf("%d", pvcRow.InodesUsed),
-			fmt.Sprintf("%d", pvcRow.InodesFree),
-			fmt.Sprintf("%.2f", pvcRow.PercentageIUsed),
-		}}
-		rows = append(rows, thisRow)
+			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
+			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
+			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
+			percentageUsedColor.Sprintf("%.2f", pvcRow.PercentageUsed),
+			percentageIUsedColor.Sprintf("%d", pvcRow.InodesUsed),
+			percentageIUsedColor.Sprintf("%d", pvcRow.InodesFree),
+			percentageIUsedColor.Sprintf("%.2f", pvcRow.PercentageIUsed),
+		})
 	}
 
-	table := &metav1.Table{
-		ColumnDefinitions: columns,
-		Rows:              rows,
-	}
-	out := bytes.NewBuffer([]byte{})
-	printer := printers.NewTablePrinter(printers.PrintOptions{
-		SortBy: "PVC",
-	})
-	printer.PrintObj(table, out)
-	fmt.Printf("\n%s\n", out)
-
-	return nil
+	// t.SetAutoIndex(true)
+	styleBold := table.StyleBold
+	styleBold.Options = table.OptionsNoBordersAndSeparators
+	t.SetStyle(styleBold)
+	// t.Style().Options.SeparateRows = true
+	t.Render()
 }
+
+func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
+	if percentageUsed > 75 {
+		return text.FgHiRed
+	} else if percentageUsed > 50 {
+		return text.FgHiMagenta
+	} else if percentageUsed > 25 {
+		return text.FgHiYellow
+	} else {
+		return text.FgHiGreen
+	}
+}
+
+// // TODO: this tablewriter doesn't allow changing color per row based on the value
+// func PrintUsingTableWriter(sliceOfOutputRowPVC []*OutputRowPVC) {
+//
+// 	var data [][]string
+// 	for _, pvcRow := range sliceOfOutputRowPVC {
+// 		currData := []string{
+// 			fmt.Sprintf("%s", pvcRow.PVCName),
+// 			fmt.Sprintf("%s", pvcRow.Namespace),
+// 			fmt.Sprintf("%s", pvcRow.PodName),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
+// 			fmt.Sprintf("%.2f", pvcRow.PercentageUsed),
+// 			fmt.Sprintf("%d", pvcRow.InodesUsed),
+// 			fmt.Sprintf("%d", pvcRow.InodesFree),
+// 			fmt.Sprintf("%.2f", pvcRow.PercentageIUsed),
+// 		}
+// 		data = append(data, currData)
+// 	}
+//
+// 	table := tablewriter.NewWriter(os.Stdout)
+// 	table.SetHeader([]string{"PVC", "Namespace", "Pod", "Size", "Used", "Available", "PercentUsed", "iused", "ifree", "Percentiused"})
+//
+// 	table.SetAutoWrapText(false)
+// 	table.SetAutoFormatHeaders(true)
+// 	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+// 	table.SetAlignment(tablewriter.ALIGN_LEFT)
+// 	table.SetCenterSeparator("")
+// 	table.SetColumnSeparator("")
+// 	table.SetRowSeparator("")
+// 	table.SetHeaderLine(false)
+// 	table.SetBorder(false)
+// 	table.SetTablePadding("\t") // pad with tabs
+// 	table.SetNoWhiteSpace(true)
+//
+// 	table.SetColumnColor()
+//
+// 	table.AppendBulk(data) // Add Bulk Data
+// 	table.Render()
+// }
+//
+// // TODO: color messes up the formatting, but this potentially will have sorting some day (currently it still does not)
+// func PrintTableUsingKubeTable(sliceOfOutputRowPVC []*OutputRowPVC) {
+// 	var columns = []metav1.TableColumnDefinition{
+// 		{Name: "PVC", Type: "string"},
+// 		{Name: "Namespace", Type: "string"},
+// 		{Name: "Pod", Type: "string"},
+// 		{Name: "Size", Type: "string"},
+// 		{Name: "Used", Type: "string"},
+// 		{Name: "Available", Type: "string"},
+// 		{Name: "PercentUsed", Type: "number", Format: "float"},
+// 		{Name: "iused", Type: "integer", Format: "int32"},
+// 		{Name: "ifree", Type: "integer", Format: "int32"},
+// 		{Name: "Percentiused", Type: "number", Format: "float"},
+// 	}
+// 	var rows []metav1.TableRow
+//
+// 	colorFmt := color.New()
+//
+// 	for _, pvcRow := range sliceOfOutputRowPVC {
+// 		colorFmt = color.Style{color.FgWhite}
+// 		pvcPercentageUsedVal := pvcRow.PercentageUsed
+// 		// pvcPercentageUsedString := fmt.Sprintf("\033[31m%.2f\033[0m", pvcPercentageUsedVal)
+//
+// 		if pvcPercentageUsedVal > 75 {
+// 			colorFmt = color.Style{color.Red}
+// 		} else if pvcPercentageUsedVal > 50 {
+// 			colorFmt = color.Style{color.Magenta}
+// 		} else if pvcPercentageUsedVal > 25 {
+// 			colorFmt = color.Style{color.Yellow}
+// 		}
+//
+// 		// var (
+// 		// 	Reset  = "\033[0m"
+// 		// 	Red    = "\033[31m"
+// 		// 	Green  = "\033[32m"
+// 		// 	Yellow = "\033[33m"
+// 		// 	Blue   = "\033[34m"
+// 		// 	Purple = "\033[35m"
+// 		// 	Cyan   = "\033[36m"
+// 		// 	Gray   = "\033[37m"
+// 		// 	White  = "\033[97m"
+// 		// )
+// 		// if pvcPercentageUsedVal > 75 {
+// 		// 	pvcPercentageUsedString = fmt.Sprintf("\033[31m%s\033[0m", pvcPercentageUsedString)
+// 		// }
+//
+// 		thisRow := metav1.TableRow{Cells: []interface{}{
+// 			fmt.Sprintf("%s", pvcRow.PVCName),
+// 			fmt.Sprintf("%s", pvcRow.Namespace),
+// 			fmt.Sprintf("%s", pvcRow.PodName),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
+// 			fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
+// 			colorFmt.Sprintf("%.2f", pvcPercentageUsedVal),
+// 			fmt.Sprintf("%d", pvcRow.InodesUsed),
+// 			fmt.Sprintf("%d", pvcRow.InodesFree),
+// 			fmt.Sprintf("%.2f", pvcRow.PercentageIUsed),
+// 		}}
+// 		rows = append(rows, thisRow)
+// 	}
+//
+// 	table := &metav1.Table{
+// 		ColumnDefinitions: columns,
+// 		Rows:              rows,
+// 	}
+// 	out := bytes.NewBuffer([]byte{})
+// 	printer := printers.NewTablePrinter(printers.PrintOptions{
+// 		SortBy: "PVC",
+// 	})
+// 	printer.PrintObj(table, out)
+// 	fmt.Printf("\n%s\n", out)
+// }
 
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
@@ -171,29 +258,29 @@ func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) s
 	}
 }
 
-func ConvertQuantityValueToHumanReadableIECStringFromSuffix(quantity *resource.Quantity, suffix string) string {
-	var convertedValue = quantity.Value()
-	switch suffix {
-	case "Ki":
-		// https://en.wikipedia.org/wiki/Kibibyte
-		// 1 KiB = 2^10 bytes = 1024 bytes
-		convertedValue = convertedValue / 1024
-	case "Mi":
-		// https://en.wikipedia.org/wiki/Mebibyte
-		// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
-		convertedValue = convertedValue / 1048576
-	case "Gi":
-		// https://en.wikipedia.org/wiki/Gibibyte
-		// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
-		convertedValue = convertedValue / 1073741824
-	case "Ti":
-		// https://en.wikipedia.org/wiki/Tebibyte
-		// 1 TiB = 2^40 bytes = 1099511627776 bytes = 1024 gibibytes
-		convertedValue = convertedValue / 1099511627776
-	default:
-	}
-	return fmt.Sprintf("%d%s", convertedValue, suffix)
-}
+// func ConvertQuantityValueToHumanReadableIECStringFromSuffix(quantity *resource.Quantity, suffix string) string {
+// 	var convertedValue = quantity.Value()
+// 	switch suffix {
+// 	case "Ki":
+// 		// https://en.wikipedia.org/wiki/Kibibyte
+// 		// 1 KiB = 2^10 bytes = 1024 bytes
+// 		convertedValue = convertedValue / 1024
+// 	case "Mi":
+// 		// https://en.wikipedia.org/wiki/Mebibyte
+// 		// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
+// 		convertedValue = convertedValue / 1048576
+// 	case "Gi":
+// 		// https://en.wikipedia.org/wiki/Gibibyte
+// 		// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
+// 		convertedValue = convertedValue / 1073741824
+// 	case "Ti":
+// 		// https://en.wikipedia.org/wiki/Tebibyte
+// 		// 1 TiB = 2^40 bytes = 1099511627776 bytes = 1024 gibibytes
+// 		convertedValue = convertedValue / 1099511627776
+// 	default:
+// 	}
+// 	return fmt.Sprintf("%d%s", convertedValue, suffix)
+// }
 
 type OutputRowPVC struct {
 	PodName   string `json:"podName"`
