@@ -8,20 +8,70 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 &#9745; Appropriate RBAC.  This utility is meant for `cluster-admin` like user; specifically, you need a service account with enough RBAC privileges to access `api/v1/nodes/` from the `kube-apiserver`.
 
-&#9745; Using a storage provisioner that populates pv metrics in a compatible manner (see what's been [tested](##Tested) below)
+&#9745; Using a storage provisioner that populates pv metrics in a compatible manner (see what's been [tested](#tested) below)
 
 ## Quick Start
 
+## Installation
+
+### Via Krew
+
 ```shell script
-> curl https://krew.sh/df-pv | bash
-> # . ~/.bashrc   # run if you use bash shell
-> # . ~/.zshrc    # run if you use zsh shell
-> kubectl df-pv
+curl https://krew.sh/df-pv | bash
+# . ~/.bashrc   # run if you use bash shell
+# . ~/.zshrc    # run if you use zsh shell
 ```
 
-## Example
+## From source
 
+```shell script
+cd $GOPATH/src/github.com/
+mkdir -p yashbhutwala
+cd yashbhutwala/
+git clone git@github.com:yashbhutwala/kubectl-df-pv.git
+cd kubectl-df-pv/
+make install
+df-pv --help
+```
+
+## Via Release Binary
+
+### macOS
+
+```shell script
+download_path="./df-pv"
+version="v0.2.2"
+curl --fail -Lo $download_path "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/${version}/kubectl-df-pv_${version}_darwin_amd64.tar.gz"
+chmod +x $download_path
+mv $(download_path) /some-dir-in-your-PATH/df-pv
+```
+
+## Usage
+
+```shell script
+kubectl df-pv
+```
 ![example output](doc/df-pv-output.png)
+
+### Flags
+
+```shell
+> kubectl df-pv --help
+
+df-pv emulates Unix style df for persistent volumes w/ ability to filter by namespace
+
+It autoconverts all "sizes" to IEC values (see: https://en.wikipedia.org/wiki/Binary_prefix and https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory)
+
+It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (too low); green: >= 25 and <= 75 (OK)]
+
+Usage:
+  df-pv [flags]
+
+Flags:
+  -h, --help               help for df-pv
+  -n, --namespace string   if present, the namespace scope for this CLI request (default is all namespaces)
+  -v, --verbosity string   log level; one of [info, debug, trace, warn, error, fatal, panic] (default "info")
+```
 
 ## Tested
 
