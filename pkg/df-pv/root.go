@@ -11,6 +11,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -155,7 +157,7 @@ func InitAndExecute() {
 	}
 }
 
-type OutputPVC struct {
+type OutputRow struct {
 	PodName   string `json:"podName"`
 	Namespace string `json:"namespace"`
 
@@ -257,7 +259,7 @@ type Volume struct {
 	} `json:"pvcRef"`
 }
 
-func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
+func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputRow, error) {
 	config, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	if err != nil {
 		return nil, err
@@ -265,68 +267,128 @@ func ListPVCs(flags *flagpole, outputCh chan string) ([]*OutputPVC, error) {
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create clientset")
+		return nil, errors.Wrapf(err, "failed to create clientset")
 	}
 
-	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodes, err := ListNodes(context.TODO(), clientset)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to list nodes")
+		return nil, errors.Wrapf(err, "failed to list nodes")
 	}
 
-	var listOfPvc []*OutputPVC
-	var jsonConvertedIntoStruct ServerResponseStruct
+	desiredNamespace := *flags.genericCliConfigFlags.Namespace
+	ctx := context.TODO()
+	return GoProduceOutputRow(ctx, clientset, nodes, desiredNamespace)
+}
 
-	// TODO: turn this into a goroutine
-	for _, node := range nodes.Items {
+func GoProduceOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string) ([]*OutputRow, error) {
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	outputRowChan := make(chan *OutputRow)
+
+	nodeItems := nodes.Items
+	g.Go(func() error {
+		defer close(outputRowChan)
+		for _, node := range nodeItems {
+			err := GetOutputRowFromNode(ctx, clientset, node, desiredNamespace, outputRowChan)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	// nodeChan := make(chan corev1.Node)
+	// for w := 1; w <= 3; w++ {
+	// 	g.Go(func() error {
+	// 		// defer func(){
+	// 		// 	if idx == (len(nodeItems) - 1) {
+	// 		// 		close(outputRowChan)
+	// 		// 	}
+	// 		// }()
+	// 		return GetOutputRowFromNode(ctx, clientset, nodeChan, desiredNamespace, outputRowChan)
+	// 	})
+	// }
+	// for _, node := range nodeItems {
+	// 	nodeChan <- node
+	// }
+	// close(nodeChan)
+
+	var sliceOfOutputRow []*OutputRow
+	g.Go(func() error {
+		for outputRow := range outputRowChan {
+			sliceOfOutputRow = append(sliceOfOutputRow, outputRow)
+		}
+		return nil
+	})
+	return sliceOfOutputRow, g.Wait()
+}
+
+func GetOutputRowFromNode(ctx context.Context, clientset *kubernetes.Clientset, node corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow) error {
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get stats from node")
+			return errors.Wrapf(err, "failed to get stats from node")
 		}
 
+		var jsonConvertedIntoStruct ServerResponseStruct
 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert the response from server")
+			return errors.Wrapf(err, "failed to convert the response from server")
 		}
 
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
-				desiredNamespace := *flags.genericCliConfigFlags.Namespace
-				if 0 < len(desiredNamespace){
-					if vol.PvcRef.PvcNamespace != desiredNamespace {
-						continue
+				outputRow := GetOutputRowFromVolume(pod, vol, desiredNamespace)
+				if nil == outputRow {
+					continue
+				} else {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case outputRowChan <- outputRow:
+						// outputCh <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
+						// fmt.Printf("Got metrics for pvc '%s' from node: '%s'\n", outputRow.PVCName, node.Name)
 					}
-				}
-
-				if 0 < len(vol.PvcRef.PvcName) {
-					runningPvc := &OutputPVC{
-						PodName:   pod.PodRef.Name,
-						Namespace: pod.PodRef.Namespace,
-
-						PVCName:        vol.PvcRef.PvcName,
-						AvailableBytes: resource.NewQuantity(vol.AvailableBytes, resource.BinarySI),
-						CapacityBytes:  resource.NewQuantity(vol.CapacityBytes, resource.BinarySI),
-						UsedBytes:      resource.NewQuantity(vol.UsedBytes, resource.BinarySI),
-						PercentageUsed: (float64(vol.UsedBytes) / float64(vol.CapacityBytes)) * 100.0,
-
-						Inodes:          vol.Inodes,
-						InodesFree:      vol.InodesFree,
-						InodesUsed:      vol.InodesUsed,
-						PercentageIUsed: (float64(vol.InodesUsed) / float64(vol.Inodes)) * 100.0,
-
-						VolumeMountName: vol.Name,
-					}
-					outputCh <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", runningPvc.PVCName, node.Name)
-					listOfPvc = append(listOfPvc, runningPvc)
 				}
 			}
 		}
+	return nil
+}
 
-		// clear out the object for reuse
-		jsonConvertedIntoStruct = ServerResponseStruct{}
+func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
+	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+}
+
+func GetOutputRowFromVolume(pod *Pod, vol *Volume, desiredNamespace string) *OutputRow {
+	var outputRow *OutputRow
+
+	if 0 < len(desiredNamespace) {
+		if vol.PvcRef.PvcNamespace != desiredNamespace {
+			return nil
+		}
 	}
 
-	return listOfPvc, nil
+	if 0 < len(vol.PvcRef.PvcName) {
+		outputRow = &OutputRow{
+			PodName:   pod.PodRef.Name,
+			Namespace: pod.PodRef.Namespace,
+
+			PVCName:        vol.PvcRef.PvcName,
+			AvailableBytes: resource.NewQuantity(vol.AvailableBytes, resource.BinarySI),
+			CapacityBytes:  resource.NewQuantity(vol.CapacityBytes, resource.BinarySI),
+			UsedBytes:      resource.NewQuantity(vol.UsedBytes, resource.BinarySI),
+			PercentageUsed: (float64(vol.UsedBytes) / float64(vol.CapacityBytes)) * 100.0,
+
+			Inodes:          vol.Inodes,
+			InodesFree:      vol.InodesFree,
+			InodesUsed:      vol.InodesUsed,
+			PercentageIUsed: (float64(vol.InodesUsed) / float64(vol.Inodes)) * 100.0,
+
+			VolumeMountName: vol.Name,
+		}
+	}
+	return outputRow
 }
 
 func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
