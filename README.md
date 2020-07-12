@@ -55,6 +55,10 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 &#9746; print PV name (right now, it prints the PVC name)
 
+&#9746; exclude namespaces
+
+&#9746; only show a specific colored result ("red", "yellow", "green")
+
 ## Motivation
 
 Have you ever wondered, "How much free disk space do all my PVs have?"  Me too!  That's why I built this plugin!  I have always just wanted to quick way to see the disk usage of my Persistent Volumes (similar to [`df`](https://en.wikipedia.org/wiki/Df_(Unix)) or `du` in Unix).  It turns out I'm not the only one, there has been many upstream Kubernetes issues open again and again about this, even some KEPs and PRs.  I have compiled some of the issues and KEPs that I've seen in the wild here:
