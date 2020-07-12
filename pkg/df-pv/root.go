@@ -8,6 +8,9 @@ import (
 	"os"
 	"path"
 
+	// "github.com/fatih/color"
+	// . "github.com/logrusorgru/aurora"
+	"github.com/gookit/color"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -21,7 +24,7 @@ import (
 )
 
 type flagpole struct {
-	outputFormat string
+	// outputFormat string
 	logLevel     string
 	namespace    string
 }
@@ -54,32 +57,34 @@ func setupRootCommand() *cobra.Command {
 				{Name: "Size", Type: "string"},
 				{Name: "Used", Type: "string"},
 				{Name: "Available", Type: "string"},
-				{Name: "PercentUsed", Type: "string"},
-				{Name: "iused", Type: "string"},
-				{Name: "ifree", Type: "string"},
-				{Name: "Percentiused", Type: "string"},
+				{Name: "PercentUsed", Type: "number", Format: "float"},
+				{Name: "iused", Type: "integer", Format: "int32"},
+				{Name: "ifree", Type: "integer", Format: "int32"},
+				{Name: "Percentiused", Type: "number", Format: "float"},
 			}
 			var rows []metav1.TableRow
 
-			// use white as default
-			// c := color.New(color.FgHiWhite)
+			colorFmt := color.New(color.FgWhite)
 
 			for _, pvc := range listOfRunningPvc {
-				// if pvc.PercentageUsed > 75 || pvc.PercentageIUsed > 75 {
-				//	c = color.New(color.FgHiRed)
-				// } else if pvc.PercentageUsed > 50 || pvc.PercentageIUsed > 50 {
-				//	c = color.New(color.FgHiMagenta)
-				// } else if pvc.PercentageUsed > 25 || pvc.PercentageIUsed > 25 {
-				//	c = color.New(color.FgHiYellow)
-				// }
+
+				pvcPercentageUsed := pvc.PercentageUsed
+				if pvcPercentageUsed > 75 {
+					colorFmt = color.Style{color.Red}
+				} else if pvcPercentageUsed > 50 {
+					colorFmt = color.Style{color.Magenta}
+				} else if pvcPercentageUsed > 25 {
+					colorFmt = color.Style{color.Yellow}
+				}
+
 				thisRow := metav1.TableRow{Cells: []interface{}{
 					fmt.Sprintf("%s", pvc.PVCName),
 					fmt.Sprintf("%s", pvc.Namespace),
 					fmt.Sprintf("%s", pvc.PodName),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.CapacityBytes, flags.outputFormat)),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.UsedBytes, flags.outputFormat)),
-					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.AvailableBytes, flags.outputFormat)),
-					fmt.Sprintf("%.2f", pvc.PercentageUsed),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.CapacityBytes)),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.UsedBytes)),
+					fmt.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvc.AvailableBytes)),
+					colorFmt.Sprintf("%.2f", pvcPercentageUsed),
 					fmt.Sprintf("%d", pvc.InodesUsed),
 					fmt.Sprintf("%d", pvc.InodesFree),
 					fmt.Sprintf("%.2f", pvc.PercentageIUsed),
@@ -93,17 +98,18 @@ func setupRootCommand() *cobra.Command {
 			}
 			out := bytes.NewBuffer([]byte{})
 			printer := printers.NewTablePrinter(printers.PrintOptions{
+
 				SortBy: "PVC",
 			})
 			printer.PrintObj(table, out)
-			fmt.Println(out.String())
+			fmt.Printf("\n%s\n", out)
 
 			return nil
 		},
 	}
 
 	rootCmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "if present, the namespace scope for this CLI request (default is all namespaces)")
-	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
+	// rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 
 	// flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
@@ -111,7 +117,33 @@ func setupRootCommand() *cobra.Command {
 }
 
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity, suffix string) string {
+func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
+	var val = quantity.Value()
+	var suffix string
+
+	TiConvertedValue := val / 1099511627776
+	GiConvertedValue := val / 1073741824
+	MiConvertedValue := val / 1048576
+	KiConvertedValue := val / 1024
+
+	if 1 < TiConvertedValue {
+		suffix = "Ti"
+		return fmt.Sprintf("%d%s", TiConvertedValue, suffix)
+	} else if 1 < GiConvertedValue {
+		suffix = "Gi"
+		return fmt.Sprintf("%d%s", GiConvertedValue, suffix)
+	} else if 1 < MiConvertedValue {
+		suffix = "Mi"
+		return fmt.Sprintf("%d%s", MiConvertedValue, suffix)
+	} else if 1 < KiConvertedValue {
+		suffix = "Ki"
+		return fmt.Sprintf("%d%s", KiConvertedValue, suffix)
+	} else {
+		return fmt.Sprintf("%d", val)
+	}
+}
+
+func ConvertQuantityValueToHumanReadableIECStringFromSuffix(quantity *resource.Quantity, suffix string) string {
 	var convertedValue = quantity.Value()
 	switch suffix {
 	case "Ki":
