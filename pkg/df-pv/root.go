@@ -248,23 +248,49 @@ func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) s
 	var val = quantity.Value()
 	var suffix string
 
-	TiConvertedValue := val / 1099511627776
-	GiConvertedValue := val / 1073741824
-	MiConvertedValue := val / 1048576
-	KiConvertedValue := val / 1024
+	TiConvertedVal := val / 1099511627776
+	GiConvertedVal := val / 1073741824
+	MiConvertedVal := val / 1048576
+	KiConvertedVal := val / 1024
 
-	if 1 < TiConvertedValue {
+	if 1 < TiConvertedVal {
 		suffix = "Ti"
-		return fmt.Sprintf("%d%s", TiConvertedValue, suffix)
-	} else if 1 < GiConvertedValue {
+		return fmt.Sprintf("%d%s", TiConvertedVal, suffix)
+	} else if 1 < GiConvertedVal {
 		suffix = "Gi"
-		return fmt.Sprintf("%d%s", GiConvertedValue, suffix)
-	} else if 1 < MiConvertedValue {
+		return fmt.Sprintf("%d%s", GiConvertedVal, suffix)
+	} else if 1 < MiConvertedVal {
 		suffix = "Mi"
-		return fmt.Sprintf("%d%s", MiConvertedValue, suffix)
-	} else if 1 < KiConvertedValue {
+		return fmt.Sprintf("%d%s", MiConvertedVal, suffix)
+	} else if 1 < KiConvertedVal {
 		suffix = "Ki"
-		return fmt.Sprintf("%d%s", KiConvertedValue, suffix)
+		return fmt.Sprintf("%d%s", KiConvertedVal, suffix)
+	} else {
+		return fmt.Sprintf("%d", val)
+	}
+}
+
+func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantity) string {
+	var val = quantity.Value()
+	var suffix string
+
+	TBConvertedVal := val / 1000000000000
+	GBConvertedVal := val / 1000000000
+	MBConvertedVal := val / 1000000
+	KBConvertedVal := val / 1000
+
+	if 1 < TBConvertedVal {
+		suffix = "TB"
+		return fmt.Sprintf("%d%s", TBConvertedVal, suffix)
+	} else if 1 < GBConvertedVal {
+		suffix = "GB"
+		return fmt.Sprintf("%d%s", GBConvertedVal, suffix)
+	} else if 1 < MBConvertedVal {
+		suffix = "MB"
+		return fmt.Sprintf("%d%s", MBConvertedVal, suffix)
+	} else if 1 < KBConvertedVal {
+		suffix = "KB"
+		return fmt.Sprintf("%d%s", KBConvertedVal, suffix)
 	} else {
 		return fmt.Sprintf("%d", val)
 	}

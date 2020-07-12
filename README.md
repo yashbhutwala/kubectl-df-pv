@@ -51,6 +51,7 @@ mv $(download_path) /some-dir-in-your-PATH/df-pv
 ```shell script
 kubectl df-pv
 ```
+
 ![example output](doc/df-pv-output.png)
 
 ### Flags
