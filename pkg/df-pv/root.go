@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
-	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +23,7 @@ import (
 type flagpole struct {
 	genericCliConfigFlags *genericclioptions.ConfigFlags
 	outputFormat          string
+	logLevel              string
 }
 
 func setupRootCommand() *cobra.Command {
@@ -34,35 +34,17 @@ func setupRootCommand() *cobra.Command {
 		Long:  `df-pv`,
 		Args:  cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			finishedCh := make(chan bool, 1)
-			nodeName := make(chan string, 1)
-			go func() {
-				lastNodeName := ""
-				for {
-					select {
-					case <-finishedCh:
-						fmt.Printf("\r")
-						return
-					case n := <-nodeName:
-						lastNodeName = n
-					case <-time.After(time.Millisecond * 100):
-						if lastNodeName == "" {
-							fmt.Printf("\r  \033[36mSearching for PVCs\033[m")
-						} else {
-							fmt.Printf("\r  %s \n", lastNodeName)
-						}
-					}
-				}
-			}()
-			defer func() {
-				finishedCh <- true
-			}()
 
-			listOfRunningPvc, err := ListPVCs(flags, nodeName)
+			logLevel, _ := log.ParseLevel(flags.logLevel)
+			log.SetLevel(logLevel)
+			log.SetFormatter(&log.TextFormatter{
+				FullTimestamp: true,
+			})
+
+			listOfRunningPvc, err := ListPVCs(flags)
 			if err != nil {
 				return errors.Cause(err)
 			}
-			finishedCh <- true
 
 			var columns = []metav1.TableColumnDefinition{
 				{Name: "PVC", Type: "string"},
@@ -119,6 +101,7 @@ func setupRootCommand() *cobra.Command {
 		},
 	}
 	rootCmd.Flags().StringVarP(&flags.outputFormat, "output", "o", "Gi", "output format for bytes; one of [Ki, Mi, Gi], see: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory")
+	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 
 	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 	return rootCmd
@@ -259,7 +242,7 @@ type Volume struct {
 	} `json:"pvcRef"`
 }
 
-func ListPVCs(flags *flagpole, outStrChan chan string) ([]*OutputRow, error) {
+func ListPVCs(flags *flagpole) ([]*OutputRow, error) {
 	config, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	if err != nil {
 		return nil, err
@@ -277,10 +260,10 @@ func ListPVCs(flags *flagpole, outStrChan chan string) ([]*OutputRow, error) {
 
 	desiredNamespace := *flags.genericCliConfigFlags.Namespace
 	ctx := context.TODO()
-	return GetSliceOfOutputRow(ctx, clientset, nodes, desiredNamespace, outStrChan)
+	return GetSliceOfOutputRow(ctx, clientset, nodes, desiredNamespace)
 }
 
-func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string, outStrChan chan string) ([]*OutputRow, error) {
+func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, nodes *corev1.NodeList, desiredNamespace string) ([]*OutputRow, error) {
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -303,7 +286,7 @@ func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, n
 	const numWorkers = 3
 	for w := 1; w <= numWorkers; w++ {
 		g.Go(func() error {
-			return GetOutputRowFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowChan, outStrChan)
+			return GetOutputRowFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowChan)
 		})
 	}
 
@@ -319,7 +302,7 @@ func GetSliceOfOutputRow(ctx context.Context, clientset *kubernetes.Clientset, n
 	return sliceOfOutputRow, g.Wait()
 }
 
-func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow, outStrChan chan string) error {
+func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowChan chan<- *OutputRow) error {
 	for node := range nodeChan {
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
 		responseRawArrayOfBytes, err := request.DoRaw(context.Background())
@@ -336,14 +319,14 @@ func GetOutputRowFromNodeChan(ctx context.Context, clientset *kubernetes.Clients
 		for _, pod := range jsonConvertedIntoStruct.Pods {
 			for _, vol := range pod.ListOfVolumes {
 				outputRow := GetOutputRowFromVolume(pod, vol, desiredNamespace)
-				if nil == outputRow{
+				if nil == outputRow {
 					continue
 				}
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				case outputRowChan <- outputRow:
-					outStrChan <- fmt.Sprintf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
+					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRow.PVCName, node.Name)
 				}
 			}
 		}
