@@ -69,7 +69,7 @@ func runRootCommand(flags *flagpole) error {
 
 	sliceOfOutputRowPVC, err := GetSliceOfOutputRowPVC(flags)
 	if err != nil {
-		return errors.Cause(err)
+		return errors.Wrapf(err, "error getting output slice")
 	}
 
 	if nil == sliceOfOutputRowPVC || 0 > len(sliceOfOutputRowPVC) {
@@ -497,11 +497,22 @@ func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clie
 	for node := range nodeChan {
 		log.Tracef("connecting to node: %s", node.Name)
 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-		responseRawArrayOfBytes, err := request.DoRaw(ctx)
+		res := request.Do(ctx)
+
+		runtimeObj, _ := res.Get()
+		// if err != nil {
+		// 	return errors.Wrapf(err, "failed to get response body")
+		// }
+		jsonText, err := json.MarshalIndent(runtimeObj, "", "  ")
+		if err != nil {
+			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
+		}
+		log.Tracef("response from node: %s\n", jsonText)
+
+		responseRawArrayOfBytes, err := res.Raw()
 		if err != nil {
 			return errors.Wrapf(err, "failed to get stats from node")
 		}
-
 		var jsonConvertedIntoStruct ServerResponseStruct
 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
 		if err != nil {
