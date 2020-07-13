@@ -328,13 +328,13 @@ type OutputRowPVC struct {
 	PVName          string             `json:"pvName"`
 	PodName         string             `json:"podName"`
 	VolumeMountName string             `json:"volumeMountName"`
-	AvailableBytes  *resource.Quantity `json:"availableBytes"`
+	AvailableBytes  *resource.Quantity `json:"availableBytes"` // TODO: use uint64 here as well? but resource.Quantity takes int64
 	CapacityBytes   *resource.Quantity `json:"capacityBytes"`
 	UsedBytes       *resource.Quantity `json:"usedBytes"`
+	InodesFree      uint64             `json:"inodesFree"`
+	Inodes          uint64             `json:"inodes"`
+	InodesUsed      uint64             `json:"inodesUsed"`
 	PercentageUsed  float64
-	InodesFree      int64 `json:"inodesFree"`
-	Inodes          int64 `json:"inodes"`
-	InodesUsed      int64 `json:"inodesUsed"`
 	PercentageIUsed float64
 }
 
@@ -386,7 +386,7 @@ type Volume struct {
 
 	// Used represents the total bytes used by the Volume.
 	// Note: For block devices this maybe more than the total size of the files.
-	UsedBytes int64 `json:"usedBytes"`
+	UsedBytes int64 `json:"usedBytes"` // TODO: use uint64 here as well?
 
 	// Capacity represents the total capacity (bytes) of the volume's
 	// underlying storage. For Volumes that share a filesystem with the host
@@ -401,18 +401,18 @@ type Volume struct {
 	AvailableBytes int64 `json:"availableBytes"`
 
 	// InodesUsed represents the total inodes used by the Volume.
-	InodesUsed int64 `json:"inodesUsed"`
+	InodesUsed uint64 `json:"inodesUsed"`
 
 	// Inodes represents the total number of inodes available in the volume.
 	// For volumes that share a filesystem with the host (e.g. emptydir, hostpath),
 	// this is the inodes available in the underlying storage,
 	// and will not equal InodesUsed + InodesFree as the fs is shared.
-	Inodes int64 `json:"inodes"`
+	Inodes uint64 `json:"inodes"`
 
 	// InodesFree represent the inodes available for the volume.  For Volumes that share
 	// a filesystem with the host (e.g. emptydir, hostpath), this is the free inodes
 	// on the underlying storage, and is shared with host processes and other volumes
-	InodesFree int64 `json:"inodesFree"`
+	InodesFree uint64 `json:"inodesFree"`
 
 	Name   string `json:"name"`
 	PvcRef struct {
