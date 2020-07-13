@@ -86,7 +86,7 @@ df-pv -v trace 2> trace.log
 
 ### Works on
 
-&#9745; **`GKE`** (**`kubernetes.io/gce-pd`** dynamic provisioner)
+&#9745; **`GKE`** (**`kubernetes.io/gce-pd`** dynamic provisioner; both with `ssd` and `standard`)
 
 &#9745; **`kubeadm`** configured bare-metal cluster ([**rook ceph block**](https://rook.io/docs/rook/v1.2/ceph-block.html) dynamic provisioner using [script](https://github.com/blackducksoftware/let-me-cluster-that-for-you/blob/master/k8s-addons/storage/external-storage/ceph/install-ceph-provisioner.sh))
 
