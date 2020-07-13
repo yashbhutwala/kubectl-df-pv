@@ -14,5 +14,6 @@ require (
 	golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 // indirect
 	k8s.io/api v0.18.5
 	k8s.io/apimachinery v0.18.5
+	k8s.io/cli-runtime v0.18.5
 	k8s.io/client-go v0.18.5
 )

@@ -21,8 +21,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 func InitAndExecute() {
@@ -34,8 +35,9 @@ func InitAndExecute() {
 }
 
 type flagpole struct {
-	logLevel  string
-	namespace string
+	logLevel              string
+	genericCliConfigFlags *genericclioptions.ConfigFlags
+	// namespace             string
 }
 
 func setupRootCommand() *cobra.Command {
@@ -54,8 +56,11 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 		},
 	}
 
-	rootCmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "if present, the namespace scope for this CLI request (default is all namespaces)")
+	// rootCmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "if present, the namespace scope for this CLI request (default is all namespaces)")
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
+
+	flags.genericCliConfigFlags = genericclioptions.NewConfigFlags(false)
+	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
 
 	return rootCmd
 }
@@ -73,7 +78,8 @@ func runRootCommand(flags *flagpole) error {
 	}
 
 	if nil == sliceOfOutputRowPVC || 0 > len(sliceOfOutputRowPVC) {
-		ns := flags.namespace
+		// ns := flags.namespace
+		ns := *flags.genericCliConfigFlags.Namespace
 		if 0 == len(ns) {
 			ns = "all"
 		}
@@ -425,22 +431,22 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 
 	ctx := context.Background()
 
-	// kubeConfig, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	kubeConfigPath, err := KubeConfigPath()
-	if err != nil {
-		return nil, err
-	}
-
-	log.Debugf("instantiating k8s client from config path: '%s'", kubeConfigPath)
-	kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
-	// kubeConfig, err := rest.InClusterConfig()
+	kubeConfig, err := GetKubeConfigFromGenericCliConfigFlags(flags.genericCliConfigFlags)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to build config from flags")
 	}
+
+	// kubeConfigPath, err := KubeConfigPath()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// log.Debugf("instantiating k8s client from config path: '%s'", kubeConfigPath)
+	// kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	// // kubeConfig, err := rest.InClusterConfig()
+	// if err != nil {
+	// 	return nil, errors.Wrapf(err, "unable to build config from flags")
+	// }
 
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
@@ -452,8 +458,8 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 		return nil, errors.Wrapf(err, "failed to list nodes")
 	}
 
-	// desiredNamespace := *flags.genericCliConfigFlags.Namespace
-	desiredNamespace := flags.namespace
+	desiredNamespace := *flags.genericCliConfigFlags.Namespace
+	// desiredNamespace := flags.namespace
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -581,10 +587,10 @@ func GetOutputRowPVCFromPodAndVolume(ctx context.Context, clientset *kubernetes.
 	return outputRowPVC
 }
 
-// func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
-// 	config, err := genericCliConfigFlags.ToRESTConfig()
-// 	return config, errors.Wrap(err, "failed to read kubeconfig")
-// }
+func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
+	config, err := genericCliConfigFlags.ToRESTConfig()
+	return config, errors.Wrap(err, "failed to read kubeconfig")
+}
 
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
 	log.Tracef("getting a list of all nodes")
