@@ -94,15 +94,15 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 	// https://github.com/jedib0t/go-pretty/tree/v6.0.4/table
 	t := table.NewWriter()
 
-	t.AppendHeader(table.Row{"Namespace", "PVC Name", "PV Name", "Node Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
+	t.AppendHeader(table.Row{"PV Name", "PVC Name", "Namespace", "Node Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 	hiWhiteColor := text.FgHiWhite
 	for _, pvcRow := range sliceOfOutputRowPVC {
 		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
 		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
 		t.AppendRow([]interface{}{
-			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
-			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
 			hiWhiteColor.Sprintf("%s", pvcRow.PVName),
+			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
+			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
 			hiWhiteColor.Sprintf("%s", pvcRow.NodeName),
 			hiWhiteColor.Sprintf("%s", pvcRow.PodName),
 			hiWhiteColor.Sprintf("%s", pvcRow.VolumeMountName),
@@ -329,9 +329,9 @@ func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantit
 // }
 
 type OutputRowPVC struct {
-	Namespace       string             `json:"namespace"`
-	PVCName         string             `json:"pvcName"`
 	PVName          string             `json:"pvName"`
+	PVCName         string             `json:"pvcName"`
+	Namespace       string             `json:"namespace"`
 	NodeName        string             `json:"nodeName"`
 	PodName         string             `json:"podName"`
 	VolumeMountName string             `json:"volumeMountName"`
