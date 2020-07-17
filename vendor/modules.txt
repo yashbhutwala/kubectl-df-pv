@@ -1,5 +1,4 @@
-# cloud.google.com/go v0.46.3
-## explicit
+# cloud.google.com/go v0.38.0
 cloud.google.com/go/compute/metadata
 # github.com/Azure/go-autorest/autorest v0.9.0
 github.com/Azure/go-autorest/autorest
@@ -90,7 +89,7 @@ github.com/liggitt/tabwriter
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/mattn/go-runewidth v0.0.7
+# github.com/mattn/go-runewidth v0.0.9
 ## explicit
 github.com/mattn/go-runewidth
 # github.com/mitchellh/mapstructure v1.1.2
@@ -99,6 +98,9 @@ github.com/mitchellh/mapstructure
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
+# github.com/oklog/run v1.1.0
+## explicit
+github.com/oklog/run
 # github.com/peterbourgon/diskv v2.0.1+incompatible
 github.com/peterbourgon/diskv
 # github.com/pkg/errors v0.9.1
@@ -134,11 +136,7 @@ golang.org/x/oauth2/google
 golang.org/x/oauth2/internal
 golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt
-# golang.org/x/sync v0.0.0-20190423024810-112230192c58
-## explicit
-golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20191026070338-33540a1f6037
-## explicit
+# golang.org/x/sys v0.0.0-20191022100944-742c48ecaeb7
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.2
@@ -155,7 +153,7 @@ golang.org/x/text/unicode/norm
 golang.org/x/text/width
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 golang.org/x/time/rate
-# google.golang.org/appengine v1.6.1
+# google.golang.org/appengine v1.5.0
 google.golang.org/appengine
 google.golang.org/appengine/internal
 google.golang.org/appengine/internal/app_identity

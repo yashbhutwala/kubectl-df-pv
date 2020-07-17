@@ -14,10 +14,10 @@ import (
 	// "github.com/olekukonko/tablewriter"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
+	"github.com/oklog/run"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -461,87 +461,127 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 	desiredNamespace := *flags.genericCliConfigFlags.Namespace
 	// desiredNamespace := flags.namespace
 
-	g, ctx := errgroup.WithContext(ctx)
-
-	nodeChan := make(chan corev1.Node)
 	outputRowPVCChan := make(chan *OutputRowPVC)
-
-	nodeItems := nodes.Items
-	g.Go(func() error {
-		defer close(nodeChan)
-		for _, node := range nodeItems {
-			select {
-			case nodeChan <- node:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+	var g run.Group
+	for _, node := range nodes.Items {
+		node := node
+		{
+			g.Add(func() error {
+				return GetOutputRowPVCFromNode(ctx, clientset, node, desiredNamespace, outputRowPVCChan)
+			}, func(err error) {
+				if err != nil {
+					log.Infof("The current actor was interrupted with: %v\n", err)
+				}
+			})
 		}
-		return nil
-	})
-
-	const numWorkers = 3
-	for w := 1; w <= numWorkers; w++ {
-		g.Go(func() error {
-			return GetOutputRowPVCFromNodeChan(ctx, clientset, nodeChan, desiredNamespace, outputRowPVCChan)
-		})
 	}
 
-	go func() {
-		g.Wait()
+	// TODO: how to do this better??...since I do not handle the error here
+	// var innerErr error
+	go func(outputRowPVCChan chan *OutputRowPVC) {
+		g.Run()
 		close(outputRowPVCChan)
-	}()
+	}(outputRowPVCChan)
 
 	var sliceOfOutputRowPVC []*OutputRowPVC
 	for outputRowPVC := range outputRowPVCChan {
 		sliceOfOutputRowPVC = append(sliceOfOutputRowPVC, outputRowPVC)
 	}
-	return sliceOfOutputRowPVC, g.Wait()
+	return sliceOfOutputRowPVC, nil
 }
 
-func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
-	for node := range nodeChan {
-		log.Tracef("connecting to node: %s", node.Name)
-		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-		res := request.Do(ctx)
+// func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
+// 	for node := range nodeChan {
+// 		log.Tracef("connecting to node: %s", node.Name)
+// 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
+// 		res := request.Do(ctx)
+//
+// 		responseRawArrayOfBytes, err := res.Raw()
+// 		if err != nil {
+// 			return errors.Wrapf(err, "failed to get stats from node")
+// 		}
+//
+// 		// for trace logging only
+// 		var nodeRespBody interface{}
+// 		err = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
+// 		if err != nil {
+// 			return errors.Wrapf(err, "unable to unmarshal json into an interface (this really shouldn't happen)")
+// 		}
+// 		// log.Tracef("response from node: %+v\n", nodeRespBody)
+// 		jsonText, err := json.Marshal(nodeRespBody)
+// 		// jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
+// 		if err != nil {
+// 			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
+// 		}
+// 		log.Tracef("response from node: %s", jsonText)
+//
+// 		var jsonConvertedIntoStruct ServerResponseStruct
+// 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
+// 		if err != nil {
+// 			return errors.Wrapf(err, "failed to convert the response from server")
+// 		}
+//
+// 		for _, pod := range jsonConvertedIntoStruct.Pods {
+// 			for _, vol := range pod.ListOfVolumes {
+// 				outputRowPVC := GetOutputRowPVCFromPodAndVolume(ctx, clientset, pod, vol, desiredNamespace)
+// 				if nil == outputRowPVC {
+// 					log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
+// 					continue
+// 				}
+// 				select {
+// 				case <-ctx.Done():
+// 					return ctx.Err()
+// 				case outputRowPVCChan <- outputRowPVC:
+// 					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
 
-		responseRawArrayOfBytes, err := res.Raw()
-		if err != nil {
-			return errors.Wrapf(err, "failed to get stats from node")
-		}
+func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, node corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
+	log.Tracef("connecting to node: %s", node.Name)
+	request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
+	res := request.Do(ctx)
 
-		// for trace logging only
-		var nodeRespBody interface{}
-		err = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
-		if err != nil {
-			return errors.Wrapf(err, "unable to unmarshal json into an interface (this really shouldn't happen)")
-		}
-		// log.Tracef("response from node: %+v\n", nodeRespBody)
-		jsonText, err := json.Marshal(nodeRespBody)
-		// jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
-		if err != nil {
-			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
-		}
-		log.Tracef("response from node: %s", jsonText)
+	responseRawArrayOfBytes, err := res.Raw()
+	if err != nil {
+		return errors.Wrapf(err, "failed to get stats from node")
+	}
 
-		var jsonConvertedIntoStruct ServerResponseStruct
-		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
-		if err != nil {
-			return errors.Wrapf(err, "failed to convert the response from server")
-		}
+	// for trace logging only
+	var nodeRespBody interface{}
+	err = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
+	if err != nil {
+		return errors.Wrapf(err, "unable to unmarshal json into an interface (this really shouldn't happen)")
+	}
+	// log.Tracef("response from node: %+v\n", nodeRespBody)
+	jsonText, err := json.Marshal(nodeRespBody)
+	// jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
+	if err != nil {
+		return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
+	}
+	log.Tracef("response from node: %s", jsonText)
 
-		for _, pod := range jsonConvertedIntoStruct.Pods {
-			for _, vol := range pod.ListOfVolumes {
-				outputRowPVC := GetOutputRowPVCFromPodAndVolume(ctx, clientset, pod, vol, desiredNamespace)
-				if nil == outputRowPVC {
-					log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
-					continue
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case outputRowPVCChan <- outputRowPVC:
-					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
-				}
+	var jsonConvertedIntoStruct ServerResponseStruct
+	err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
+	if err != nil {
+		return errors.Wrapf(err, "failed to convert the response from server")
+	}
+
+	for _, pod := range jsonConvertedIntoStruct.Pods {
+		for _, vol := range pod.ListOfVolumes {
+			outputRowPVC := GetOutputRowPVCFromPodAndVolume(ctx, clientset, pod, vol, desiredNamespace)
+			if nil == outputRowPVC {
+				log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case outputRowPVCChan <- outputRowPVC:
+				log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
 			}
 		}
 	}
