@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-
 	// "github.com/fatih/color"
 	// "github.com/gookit/color"
 	// . "github.com/logrusorgru/aurora"
@@ -95,7 +94,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 	// https://github.com/jedib0t/go-pretty/tree/v6.0.4/table
 	t := table.NewWriter()
 
-	t.AppendHeader(table.Row{"Namespace", "PVC Name", "PV Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
+	t.AppendHeader(table.Row{"Namespace", "PVC Name", "PV Name", "Node Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
 	hiWhiteColor := text.FgHiWhite
 	for _, pvcRow := range sliceOfOutputRowPVC {
 		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
@@ -104,6 +103,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
 			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
 			hiWhiteColor.Sprintf("%s", pvcRow.PVName),
+			hiWhiteColor.Sprintf("%s", pvcRow.NodeName),
 			hiWhiteColor.Sprintf("%s", pvcRow.PodName),
 			hiWhiteColor.Sprintf("%s", pvcRow.VolumeMountName),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
@@ -332,6 +332,7 @@ type OutputRowPVC struct {
 	Namespace       string             `json:"namespace"`
 	PVCName         string             `json:"pvcName"`
 	PVName          string             `json:"pvName"`
+	NodeName        string             `json:"nodeName"`
 	PodName         string             `json:"podName"`
 	VolumeMountName string             `json:"volumeMountName"`
 	AvailableBytes  *resource.Quantity `json:"availableBytes"` // TODO: use uint64 here as well? but resource.Quantity takes int64
@@ -453,17 +454,31 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 		return nil, errors.Wrapf(err, "failed to create clientset")
 	}
 
-	nodes, err := ListNodes(context.TODO(), clientset)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to list nodes")
-	}
-
 	desiredNamespace := *flags.genericCliConfigFlags.Namespace
 	// desiredNamespace := flags.namespace
+	var sliceOfNodeName []string
+	if 0 == len(desiredNamespace) {
+		nodes, err := ListNodes(ctx, clientset)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to list nodes")
+		}
+		nodeItems := nodes.Items
+		for _, node := range nodeItems {
+			sliceOfNodeName = append(sliceOfNodeName, node.Name)
+		}
+	} else {
+		nodeNameToPodNames, err := GetWhichNodesToQueryBasedOnNamespace(ctx, clientset, desiredNamespace)
+		if err != nil {
+			return nil, err
+		}
+		for nodeName, _ := range nodeNameToPodNames {
+			sliceOfNodeName = append(sliceOfNodeName, nodeName)
+		}
+	}
 
 	outputRowPVCChan := make(chan *OutputRowPVC)
 	var g run.Group
-	for _, node := range nodes.Items {
+	for _, node := range sliceOfNodeName {
 		node := node
 		{
 			g.Add(func() error {
@@ -540,9 +555,9 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 // 	return nil
 // }
 
-func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, node corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
-	log.Tracef("connecting to node: %s", node.Name)
-	request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
+func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, nodeName string, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
+	log.Tracef("connecting to node: %s", nodeName)
+	request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(nodeName).SubResource("proxy").Suffix("stats/summary")
 	res := request.Do(ctx)
 
 	responseRawArrayOfBytes, err := res.Raw()
@@ -577,15 +592,31 @@ func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientse
 				log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
 				continue
 			}
+			outputRowPVC.NodeName = nodeName
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case outputRowPVCChan <- outputRowPVC:
-				log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
+				log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, nodeName)
 			}
 		}
 	}
 	return nil
+}
+
+func GetWhichNodesToQueryBasedOnNamespace(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string) (map[string][]string, error) {
+	podList, err := ListPods(ctx, clientset, desiredNamespace)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeNameToPodNames := make(map[string][]string)
+	for _, pod := range podList.Items {
+		nodeName := pod.Spec.NodeName
+		podName := pod.Name
+		nodeNameToPodNames[nodeName] = append(nodeNameToPodNames[nodeName], podName)
+	}
+	return nodeNameToPodNames, nil
 }
 
 func GetOutputRowPVCFromPodAndVolume(ctx context.Context, clientset *kubernetes.Clientset, pod *Pod, vol *Volume, desiredNamespace string) *OutputRowPVC {
@@ -635,6 +666,11 @@ func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericcliopt
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
 	log.Tracef("getting a list of all nodes")
 	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+}
+
+func ListPods(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.PodList, error) {
+	log.Tracef("getting a list of all pods in namespace: %s", namespace)
+	return clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 }
 
 func GetPVNameFromPVCName(ctx context.Context, clientset *kubernetes.Clientset, namespace string, pvcName string) (string, error) {
