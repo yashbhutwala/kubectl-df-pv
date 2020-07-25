@@ -476,86 +476,66 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 		}
 	}
 
+	var mainGroup run.Group
 	outputRowPVCChan := make(chan *OutputRowPVC)
-	var g run.Group
-	for _, node := range sliceOfNodeName {
-		node := node
-		{
-			g.Add(func() error {
-				return GetOutputRowPVCFromNode(ctx, clientset, node, desiredNamespace, outputRowPVCChan)
-			}, func(err error) {
-				if err != nil {
-					log.Infof("The current actor was interrupted with: %v\n", err)
-				}
-			})
-		}
+	var sliceOfOutputRowPVC []*OutputRowPVC
+
+	// produce concurrently
+	{
+		mainGroup.Add(func() error {
+			return ProduceOutputRowsConcurrently(ctx, clientset, desiredNamespace, sliceOfNodeName, outputRowPVCChan)
+		}, func(err error) {
+			if err != nil {
+				log.Infof("TODO goroutine error handling; current actor was interrupted with: %v\n", err)
+			}
+		})
 	}
 
-	// TODO: how to do this better??...since I do not handle the error here
-	// var innerErr error
-	go func(outputRowPVCChan chan *OutputRowPVC) {
-		g.Run()
-		close(outputRowPVCChan)
-	}(outputRowPVCChan)
+	// consume concurrently
+	{
+		mainGroup.Add(func() error {
+			sliceOfOutputRowPVC = ConsumeOutputRowsConcurrently(outputRowPVCChan)
+			return nil
+		}, func(err error) {
+			if err != nil {
+				log.Infof("TODO goroutine error handling; current actor was interrupted with: %v\n", err)
+			}
+		})
+	}
 
+	return sliceOfOutputRowPVC, mainGroup.Run()
+}
+
+// consumer
+func ConsumeOutputRowsConcurrently(outputRowPVCChan <-chan *OutputRowPVC) []*OutputRowPVC {
 	var sliceOfOutputRowPVC []*OutputRowPVC
 	for outputRowPVC := range outputRowPVCChan {
 		sliceOfOutputRowPVC = append(sliceOfOutputRowPVC, outputRowPVC)
 	}
-	return sliceOfOutputRowPVC, nil
+	return sliceOfOutputRowPVC
 }
 
-// func GetOutputRowPVCFromNodeChan(ctx context.Context, clientset *kubernetes.Clientset, nodeChan <-chan corev1.Node, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
-// 	for node := range nodeChan {
-// 		log.Tracef("connecting to node: %s", node.Name)
-// 		request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("stats/summary")
-// 		res := request.Do(ctx)
-//
-// 		responseRawArrayOfBytes, err := res.Raw()
-// 		if err != nil {
-// 			return errors.Wrapf(err, "failed to get stats from node")
-// 		}
-//
-// 		// for trace logging only
-// 		var nodeRespBody interface{}
-// 		err = json.Unmarshal(responseRawArrayOfBytes, &nodeRespBody)
-// 		if err != nil {
-// 			return errors.Wrapf(err, "unable to unmarshal json into an interface (this really shouldn't happen)")
-// 		}
-// 		// log.Tracef("response from node: %+v\n", nodeRespBody)
-// 		jsonText, err := json.Marshal(nodeRespBody)
-// 		// jsonText, err := json.MarshalIndent(nodeRespBody, "", "  ")
-// 		if err != nil {
-// 			return errors.Wrapf(err, "unable to marshal json (this really shouldn't happen)")
-// 		}
-// 		log.Tracef("response from node: %s", jsonText)
-//
-// 		var jsonConvertedIntoStruct ServerResponseStruct
-// 		err = json.Unmarshal(responseRawArrayOfBytes, &jsonConvertedIntoStruct)
-// 		if err != nil {
-// 			return errors.Wrapf(err, "failed to convert the response from server")
-// 		}
-//
-// 		for _, pod := range jsonConvertedIntoStruct.Pods {
-// 			for _, vol := range pod.ListOfVolumes {
-// 				outputRowPVC := GetOutputRowPVCFromPodAndVolume(ctx, clientset, pod, vol, desiredNamespace)
-// 				if nil == outputRowPVC {
-// 					log.Tracef("no pvc found for pod: '%s', vol: '%s', desiredNamespace: '%s'; continuing...", pod.PodRef.Name, vol.PvcRef.PvcName, desiredNamespace)
-// 					continue
-// 				}
-// 				select {
-// 				case <-ctx.Done():
-// 					return ctx.Err()
-// 				case outputRowPVCChan <- outputRowPVC:
-// 					log.Debugf("Got metrics for pvc '%s' from node: '%s'", outputRowPVC.PVCName, node.Name)
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
+// producer
+func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string, nodeNames []string, outputRowPVCChan chan<- *OutputRowPVC) error {
+	var producerGroup run.Group
+	for _, nodeName := range nodeNames {
+		nodeName := nodeName
+		producerGroup.Add(func() error {
+			return GetOutputRowPVCFromNode(ctx, clientset, desiredNamespace, nodeName, outputRowPVCChan)
+		}, func(err error) {
+			if err != nil {
+				log.Infof("TODO goroutine error handling; current actor was interrupted with: %v\n", err)
+			}
+		})
+	}
+	if err := producerGroup.Run(); err != nil {
+		return err
+	}
+	close(outputRowPVCChan)
+	return nil
+}
 
-func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, nodeName string, desiredNamespace string, outputRowPVCChan chan<- *OutputRowPVC) error {
+func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string, nodeName string, outputRowPVCChan chan<- *OutputRowPVC) error {
 	log.Tracef("connecting to node: %s", nodeName)
 	request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(nodeName).SubResource("proxy").Suffix("stats/summary")
 	res := request.Do(ctx)
