@@ -605,13 +605,13 @@ func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientse
 }
 
 func GetWhichNodesToQueryBasedOnNamespace(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string) (map[string][]string, error) {
-	podList, err := ListPods(ctx, clientset, desiredNamespace)
+	sliceOfPod, err := ListPodsWithPersistentVolumeClaims(ctx, clientset, desiredNamespace)
 	if err != nil {
 		return nil, err
 	}
 
 	nodeNameToPodNames := make(map[string][]string)
-	for _, pod := range podList.Items {
+	for _, pod := range sliceOfPod {
 		nodeName := pod.Spec.NodeName
 		podName := pod.Name
 		nodeNameToPodNames[nodeName] = append(nodeNameToPodNames[nodeName], podName)
@@ -673,6 +673,27 @@ func ListPods(ctx context.Context, clientset *kubernetes.Clientset, namespace st
 	return clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 }
 
+// kubectl get pods --all-namespaces -o=json | jq -c \
+// '.items[] | {name: .metadata.name, namespace: .metadata.namespace, claimName:.spec.volumes[] | select( has ("persistentVolumeClaim") ).persistentVolumeClaim.claimName }'
+func ListPodsWithPersistentVolumeClaims(ctx context.Context, clientset *kubernetes.Clientset, namespace string) ([]corev1.Pod, error) {
+	log.Tracef("getting a list of pods with PVC in namespace: %s", namespace)
+	pods, err := ListPods(ctx, clientset, namespace)
+	if err != nil {
+		return nil, err
+	}
+	var sliceOfPodsWithPVCs []corev1.Pod
+	for _, pod := range pods.Items {
+		volumes := pod.Spec.Volumes
+		for _, vol := range volumes {
+			if vol.PersistentVolumeClaim != nil && 0 < len(vol.PersistentVolumeClaim.ClaimName) {
+				log.Tracef("found pod: %s with PVC: %s", pod.Name, vol.PersistentVolumeClaim.ClaimName)
+				sliceOfPodsWithPVCs = append(sliceOfPodsWithPVCs, pod)
+			}
+		}
+	}
+	return sliceOfPodsWithPVCs, err
+}
+
 func GetPVNameFromPVCName(ctx context.Context, clientset *kubernetes.Clientset, namespace string, pvcName string) (string, error) {
 	var pvName string
 	pvc, err := clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{})
@@ -690,4 +711,20 @@ func KubeConfigPath() (string, error) {
 		return "", errors.Wrapf(err, "unable to get home dir")
 	}
 	return path.Join(home, ".kube", "config"), nil
+}
+
+func ListPVCs(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.PersistentVolumeClaimList, error) {
+	log.Tracef("getting a list of all PVCs in namespace: %s", namespace)
+	return clientset.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
+}
+
+func ListPVs(ctx context.Context, clientset *kubernetes.Clientset, namespace string) {
+	pvList, _ := clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	var pvcNames []string
+	for _, pv := range pvList.Items {
+		if pv.Spec.ClaimRef.Name == namespace {
+			pvcName := pv.Spec.ClaimRef.Name
+			pvcNames = append(pvcNames, pvcName)
+		}
+	}
 }
