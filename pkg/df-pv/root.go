@@ -341,8 +341,8 @@ type OutputRowPVC struct {
 	InodesFree      uint64             `json:"inodesFree"`
 	Inodes          uint64             `json:"inodes"`
 	InodesUsed      uint64             `json:"inodesUsed"`
-	PercentageUsed  float64
-	PercentageIUsed float64
+	PercentageUsed  float64            `json:"percentageUsed"`
+	PercentageIUsed float64            `json:"percentageIUsed"`
 }
 
 type ServerResponseStruct struct {
