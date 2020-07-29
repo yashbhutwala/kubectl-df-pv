@@ -36,6 +36,7 @@ func InitAndExecute() {
 type flagpole struct {
 	logLevel              string
 	genericCliConfigFlags *genericclioptions.ConfigFlags
+	disableColor          bool
 }
 
 func setupRootCommand() *cobra.Command {
@@ -55,6 +56,7 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
+	rootCmd.Flags().BoolVarP(&flags.disableColor, "disable-color", "d", false, "boolean flag for disabling colored output")
 
 	flags.genericCliConfigFlags = genericclioptions.NewConfigFlags(false)
 	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
@@ -82,28 +84,33 @@ func runRootCommand(flags *flagpole) error {
 		}
 		log.Infof("Either no volumes found in namespace/s: '%s' or the storage provisioner used for the volumes does not publish metrics to kubelet", ns)
 	} else {
-		PrintUsingGoPretty(sliceOfOutputRowPVC)
+		PrintUsingGoPretty(sliceOfOutputRowPVC, flags.disableColor)
 	}
 
 	return nil
 }
 
-func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
+func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool) {
+	if disableColor {
+		text.DisableColors()
+	}
 	// https://github.com/jedib0t/go-pretty/tree/v6.0.4/table
 	t := table.NewWriter()
 
 	t.AppendHeader(table.Row{"PV Name", "PVC Name", "Namespace", "Node Name", "Pod Name", "Volume Mount Name", "Size", "Used", "Available", "%Used", "iused", "ifree", "%iused"})
-	hiWhiteColor := text.FgHiWhite
+	var whiteColor = text.FgWhite
+	var percentageUsedColor text.Color
+	var percentageIUsedColor text.Color
 	for _, pvcRow := range sliceOfOutputRowPVC {
-		percentageUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageUsed)
-		percentageIUsedColor := GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
+		percentageUsedColor = GetColorFromPercentageUsed(pvcRow.PercentageUsed)
+		percentageIUsedColor = GetColorFromPercentageUsed(pvcRow.PercentageIUsed)
 		t.AppendRow([]interface{}{
-			hiWhiteColor.Sprintf("%s", pvcRow.PVName),
-			hiWhiteColor.Sprintf("%s", pvcRow.PVCName),
-			hiWhiteColor.Sprintf("%s", pvcRow.Namespace),
-			hiWhiteColor.Sprintf("%s", pvcRow.NodeName),
-			hiWhiteColor.Sprintf("%s", pvcRow.PodName),
-			hiWhiteColor.Sprintf("%s", pvcRow.VolumeMountName),
+			fmt.Sprintf("%s", pvcRow.PVName),
+			fmt.Sprintf("%s", pvcRow.PVCName),
+			fmt.Sprintf("%s", pvcRow.Namespace),
+			fmt.Sprintf("%s", pvcRow.NodeName),
+			fmt.Sprintf("%s", pvcRow.PodName),
+			fmt.Sprintf("%s", pvcRow.VolumeMountName),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.CapacityBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.UsedBytes)),
 			percentageUsedColor.Sprintf("%s", ConvertQuantityValueToHumanReadableIECString(pvcRow.AvailableBytes)),
@@ -118,7 +125,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 	styleBold := table.StyleBold
 	styleBold.Options = table.OptionsNoBordersAndSeparators
 	t.SetStyle(styleBold)
-	t.Style().Color.Header = text.Colors{hiWhiteColor, text.Bold}
+	t.Style().Color.Header = text.Colors{whiteColor, text.Bold}
 	// t.Style().Options.SeparateRows = true
 	// t.SetAutoIndex(true)
 	// t.SetOutputMirror(os.Stdout)
@@ -127,11 +134,11 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC) {
 
 func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 	if percentageUsed > 75 {
-		return text.FgHiRed
+		return text.FgRed
 	} else if percentageUsed < 25 {
-		return text.FgHiYellow
+		return text.FgYellow
 	} else {
-		return text.FgHiGreen
+		return text.FgGreen
 	}
 }
 
