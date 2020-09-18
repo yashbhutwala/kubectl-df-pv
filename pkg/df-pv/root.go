@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+
 	// "github.com/fatih/color"
 	// "github.com/gookit/color"
 	// . "github.com/logrusorgru/aurora"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// InitAndExecute sets up and executes the cobra root command
 func InitAndExecute() {
 	rootCmd := setupRootCommand()
 	if err := errors.Wrapf(rootCmd.Execute(), "run df-pv root command"); err != nil {
@@ -90,6 +92,7 @@ func runRootCommand(flags *flagpole) error {
 	return nil
 }
 
+// PrintUsingGoPretty prints a slice of output rows
 func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool) {
 	if disableColor {
 		text.DisableColors()
@@ -132,6 +135,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool) 
 	fmt.Printf("\n%s\n\n", t.Render())
 }
 
+// GetColorFromPercentageUsed gives a color based on percentage
 func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 	if percentageUsed > 75 {
 		return text.FgRed
@@ -142,6 +146,7 @@ func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 	}
 }
 
+// ConvertQuantityValueToHumanReadableIECString converts value to human readable IEC format
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
 	var val = quantity.Value()
@@ -177,6 +182,7 @@ func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) s
 	}
 }
 
+// ConvertQuantityValueToHumanReadableDecimalString converts value to human readable decimal format
 func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantity) string {
 	var val = quantity.Value()
 	var suffix string
@@ -203,6 +209,7 @@ func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantit
 	}
 }
 
+// OutputRowPVC represents the output row
 type OutputRowPVC struct {
 	PVName          string             `json:"pvName"`
 	PVCName         string             `json:"pvcName"`
@@ -220,10 +227,12 @@ type OutputRowPVC struct {
 	PercentageIUsed float64            `json:"percentageIUsed"`
 }
 
+// ServerResponseStruct represents the response at the node endpoint
 type ServerResponseStruct struct {
 	Pods []*Pod `json:"pods"`
 }
 
+// Pod represents pod spec in the server response
 type Pod struct {
 	/*
 		EXAMPLE:
@@ -247,6 +256,7 @@ type Pod struct {
 	ListOfVolumes []*Volume `json:"volume"`
 }
 
+// Volume represents the volume struct
 /*
 EXAMPLE:
 {
@@ -303,6 +313,7 @@ type Volume struct {
 	} `json:"pvcRef"`
 }
 
+// GetSliceOfOutputRowPVC gets the output row
 func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 
 	ctx := context.Background()
@@ -346,7 +357,7 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 		if err != nil {
 			return nil, err
 		}
-		for nodeName, _ := range nodeNameToPodNames {
+		for nodeName := range nodeNameToPodNames {
 			sliceOfNodeName = append(sliceOfNodeName, nodeName)
 		}
 	}
@@ -381,7 +392,7 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 	return sliceOfOutputRowPVC, mainGroup.Run()
 }
 
-// consumer
+// ConsumeOutputRowsConcurrently consumes processed output rows concurrently
 func ConsumeOutputRowsConcurrently(outputRowPVCChan <-chan *OutputRowPVC) []*OutputRowPVC {
 	var sliceOfOutputRowPVC []*OutputRowPVC
 	for outputRowPVC := range outputRowPVCChan {
@@ -390,7 +401,7 @@ func ConsumeOutputRowsConcurrently(outputRowPVCChan <-chan *OutputRowPVC) []*Out
 	return sliceOfOutputRowPVC
 }
 
-// producer
+// ProduceOutputRowsConcurrently produces output rows concurrently
 func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string, nodeNames []string, outputRowPVCChan chan<- *OutputRowPVC) error {
 	var producerGroup run.Group
 	for _, nodeName := range nodeNames {
@@ -410,6 +421,7 @@ func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Cl
 	return nil
 }
 
+// GetOutputRowPVCFromNode gets the output row given a nodeName
 func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string, nodeName string, outputRowPVCChan chan<- *OutputRowPVC) error {
 	log.Tracef("connecting to node: %s", nodeName)
 	request := clientset.CoreV1().RESTClient().Get().Resource("nodes").Name(nodeName).SubResource("proxy").Suffix("stats/summary")
@@ -459,6 +471,7 @@ func GetOutputRowPVCFromNode(ctx context.Context, clientset *kubernetes.Clientse
 	return nil
 }
 
+// GetWhichNodesToQueryBasedOnNamespace gets a list of nodes to query for all the pods in a namespace
 func GetWhichNodesToQueryBasedOnNamespace(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string) (map[string][]string, error) {
 	sliceOfPod, err := ListPodsWithPersistentVolumeClaims(ctx, clientset, desiredNamespace)
 	if err != nil {
@@ -474,16 +487,16 @@ func GetWhichNodesToQueryBasedOnNamespace(ctx context.Context, clientset *kubern
 	return nodeNameToPodNames, nil
 }
 
+// GetOutputRowPVCFromPodAndVolume gets an output row for a given pod, volume and optionally namespace
 func GetOutputRowPVCFromPodAndVolume(ctx context.Context, clientset *kubernetes.Clientset, pod *Pod, vol *Volume, desiredNamespace string) *OutputRowPVC {
 	var outputRowPVC *OutputRowPVC
 
 	if 0 < len(desiredNamespace) {
 		if vol.PvcRef.PvcNamespace != desiredNamespace {
 			return nil
-		} else {
-			log.Debugf("restricting findings to namespace: '%s'", desiredNamespace)
 		}
 	}
+	log.Debugf("restricting findings to namespace: '%s'", desiredNamespace)
 
 	if 0 < len(vol.PvcRef.PvcName) {
 		namespace := pod.PodRef.Namespace
@@ -513,21 +526,25 @@ func GetOutputRowPVCFromPodAndVolume(ctx context.Context, clientset *kubernetes.
 	return outputRowPVC
 }
 
+// GetKubeConfigFromGenericCliConfigFlags gets the kubeconfig from all the flags
 func GetKubeConfigFromGenericCliConfigFlags(genericCliConfigFlags *genericclioptions.ConfigFlags) (*rest.Config, error) {
 	config, err := genericCliConfigFlags.ToRESTConfig()
 	return config, errors.Wrap(err, "failed to read kubeconfig")
 }
 
+// ListNodes returns a list of nodes
 func ListNodes(ctx context.Context, clientset *kubernetes.Clientset) (*corev1.NodeList, error) {
 	log.Tracef("getting a list of all nodes")
 	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 }
 
+// ListPods returns a list of pods
 func ListPods(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.PodList, error) {
 	log.Tracef("getting a list of all pods in namespace: %s", namespace)
 	return clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 }
 
+// ListPodsWithPersistentVolumeClaims returns a list of pods with PVCs
 // kubectl get pods --all-namespaces -o=json | jq -c \
 // '.items[] | {name: .metadata.name, namespace: .metadata.namespace, claimName:.spec.volumes[] | select( has ("persistentVolumeClaim") ).persistentVolumeClaim.claimName }'
 func ListPodsWithPersistentVolumeClaims(ctx context.Context, clientset *kubernetes.Clientset, namespace string) ([]corev1.Pod, error) {
@@ -549,6 +566,7 @@ func ListPodsWithPersistentVolumeClaims(ctx context.Context, clientset *kubernet
 	return sliceOfPodsWithPVCs, err
 }
 
+// GetPVNameFromPVCName returns the name of persistent volume given a namespace and persistent volume claim name
 func GetPVNameFromPVCName(ctx context.Context, clientset *kubernetes.Clientset, namespace string, pvcName string) (string, error) {
 	var pvName string
 	pvc, err := clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{})
@@ -559,6 +577,7 @@ func GetPVNameFromPVCName(ctx context.Context, clientset *kubernetes.Clientset, 
 	return pvName, err
 }
 
+// KubeConfigPath returns the path to kubeconfig file
 func KubeConfigPath() (string, error) {
 	log.Debugf("getting kubeconfig path based on user's home dir")
 	home, err := os.UserHomeDir()
@@ -568,11 +587,13 @@ func KubeConfigPath() (string, error) {
 	return path.Join(home, ".kube", "config"), nil
 }
 
+// ListPVCs returns a list of PVCs for a given namespace
 func ListPVCs(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.PersistentVolumeClaimList, error) {
 	log.Tracef("getting a list of all PVCs in namespace: %s", namespace)
 	return clientset.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 }
 
+// ListPVs returns a list of PVs, scoped to corresponding mapped PVCs based on the namespace
 func ListPVs(ctx context.Context, clientset *kubernetes.Clientset, namespace string) {
 	pvList, _ := clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	var pvcNames []string
