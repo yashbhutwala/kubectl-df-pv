@@ -10,10 +10,10 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
-	k8s.io/api v0.18.6
-	k8s.io/apimachinery v0.18.6
-	k8s.io/cli-runtime v0.18.6
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
+	k8s.io/cli-runtime v0.19.2
 	k8s.io/client-go v11.0.0+incompatible
 )
 
-replace k8s.io/client-go v11.0.0+incompatible => k8s.io/client-go v0.18.6
+replace k8s.io/client-go v11.0.0+incompatible => k8s.io/client-go v0.19.2
