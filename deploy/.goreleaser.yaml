@@ -12,6 +12,7 @@ builds:
     - windows
     - darwin
     goarch:
+    - arm64
     - amd64
     - "386"
     env:
