@@ -14,10 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # https://github.com/actions/checkout/releases
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      # https://github.com/actions/setup-go/releases
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
       # https://github.com/goreleaser/goreleaser-action/releases
-      - name: Create a Release using GoReleaser
-        uses: goreleaser/goreleaser-action@v2.7.0
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
         with:
           version: latest
           args: release --rm-dist --config deploy/.goreleaser.yaml
