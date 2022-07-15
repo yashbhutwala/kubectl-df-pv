@@ -42,8 +42,8 @@ df-pv --help
 download_path="./df-pv"
 version="v0.2.2"
 curl --fail -Lo $download_path "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/${version}/kubectl-df-pv_${version}_darwin_amd64.tar.gz"
-chmod +x $download_path
-mv $(download_path) /some-dir-in-your-PATH/df-pv
+chmod +x ${download_path}
+mv ${download_path} /some-dir-in-your-PATH/df-pv
 ```
 
 ## Usage
