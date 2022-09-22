@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	// "github.com/fatih/color"
 	// "github.com/gookit/color"
@@ -149,7 +150,7 @@ func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 // ConvertQuantityValueToHumanReadableIECString converts value to human readable IEC format
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
-	var val = quantity.Value()
+	var val = float64(quantity.Value())
 	var suffix string
 
 	// https://en.wikipedia.org/wiki/Tebibyte
@@ -167,19 +168,20 @@ func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) s
 
 	if 1 < TiConvertedVal {
 		suffix = "Ti"
-		return fmt.Sprintf("%d%s", TiConvertedVal, suffix)
+		val = TiConvertedVal
 	} else if 1 < GiConvertedVal {
 		suffix = "Gi"
-		return fmt.Sprintf("%d%s", GiConvertedVal, suffix)
+		val = GiConvertedVal
 	} else if 1 < MiConvertedVal {
 		suffix = "Mi"
-		return fmt.Sprintf("%d%s", MiConvertedVal, suffix)
+		val = MiConvertedVal
 	} else if 1 < KiConvertedVal {
 		suffix = "Ki"
-		return fmt.Sprintf("%d%s", KiConvertedVal, suffix)
-	} else {
-		return fmt.Sprintf("%d", val)
+		val = KiConvertedVal
 	}
+	// strip trailing zeroes, then strip decimal if not >= 0.01
+	strVal := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".")
+	return fmt.Sprintf("%s%s", strVal, suffix)
 }
 
 // ConvertQuantityValueToHumanReadableDecimalString converts value to human readable decimal format
