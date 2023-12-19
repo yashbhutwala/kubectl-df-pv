@@ -18,6 +18,17 @@ spec:
     bin: "df-pv"
   - selector:
       matchLabels:
+        os: linux
+        arch: arm64
+    {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/kubectl-df-pv_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}
+    files:
+    - from: "df-pv"
+      to: "."
+    - from: "LICENSE"
+      to: "."
+    bin: "df-pv"
+  - selector:
+      matchLabels:
         os: darwin
         arch: arm64
     {{addURIAndSha "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/{{ .TagName }}/kubectl-df-pv_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}
