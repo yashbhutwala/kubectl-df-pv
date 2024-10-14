@@ -140,9 +140,9 @@ func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 	if percentageUsed > 75 {
 		return text.FgRed
 	} else if percentageUsed < 25 {
-		return text.FgYellow
-	} else {
 		return text.FgGreen
+	} else {
+		return text.FgYellow
 	}
 }
 
