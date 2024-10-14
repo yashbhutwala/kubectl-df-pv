@@ -3,7 +3,7 @@
 project_name: kubectl-df-pv
 release:
   github:
-    owner: yashbhutwala
+    owner: X-dark
     name: kubectl-df-pv
 builds:
   - id: df-pv
@@ -19,9 +19,9 @@ builds:
       - CGO_ENABLED=0
     main: cmd/df-pv/main.go
     ldflags: -s -w
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.version={{.Version}}
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.buildTime={{.Date}}
+      -X github.com/X-dark/kubectl-df-pv/pkg/version.version={{.Version}}
+      -X github.com/X-dark/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
+      -X github.com/X-dark/kubectl-df-pv/pkg/version.buildTime={{.Date}}
       -extldflags "-static"
     flags: -tags netgo -installsuffix netgo
     binary: df-pv

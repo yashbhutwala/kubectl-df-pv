@@ -2,6 +2,8 @@
 
 A `kubectl` plugin to see `df` for persistent volumes.
 
+* Forked from https://github.com/yashbhutwala/kubectl-df-pv
+
 ## Requirements
 
 &#9745; `kube-apiserver` has `api/v1/nodes/` endpoint enabled
@@ -26,9 +28,9 @@ curl https://krew.sh/df-pv | bash
 
 ```shell script
 cd $GOPATH/src/github.com/
-mkdir -p yashbhutwala
-cd yashbhutwala/
-git clone git@github.com:yashbhutwala/kubectl-df-pv.git
+mkdir -p X-dark
+cd X-dark/
+git clone git@github.com:X-dark/kubectl-df-pv.git
 cd kubectl-df-pv/
 make install
 df-pv --help
@@ -41,7 +43,7 @@ df-pv --help
 ```shell script
 download_path="./df-pv"
 version="v0.2.2"
-curl --fail -Lo $download_path "https://github.com/yashbhutwala/kubectl-df-pv/releases/download/${version}/kubectl-df-pv_${version}_darwin_amd64.tar.gz"
+curl --fail -Lo $download_path "https://github.com/X-dark/kubectl-df-pv/releases/download/${version}/kubectl-df-pv_${version}_darwin_amd64.tar.gz"
 chmod +x $download_path
 mv $(download_path) /some-dir-in-your-PATH/df-pv
 ```

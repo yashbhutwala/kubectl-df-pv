@@ -1,5 +1,5 @@
-PKG := github.com/yashbhutwala/kubectl-df-pv
-ESCPKG := github.com\/yashbhutwala\/kubectl-df-pv
+PKG := github.com/X-dark/kubectl-df-pv
+ESCPKG := github.com\/X-dark\/kubectl-df-pv
 
 LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 GOVERALLS_PKG := github.com/mattn/goveralls
