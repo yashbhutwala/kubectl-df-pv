@@ -36,6 +36,10 @@ builds:
 # while ensuring common docs are embedded in the archives.
 archives:
   - name_template: '{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    formats: ["tar.gz"]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
     files:
       - licence*
       - LICENCE*
