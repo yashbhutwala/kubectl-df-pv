@@ -1,41 +1,41 @@
-# Sources:
-# https://github.com/replicatedhq/outdated/blob/v0.3.3/deploy/.goreleaser.yaml
-project_name: kubectl-df-pv
+version: 2
+
+project: kubectl-df-pv
+
 release:
   github:
     owner: yashbhutwala
     name: kubectl-df-pv
+
 builds:
   - id: df-pv
-    goos:
-    - linux
-    - windows
-    - darwin
-    goarch:
-    - arm64
-    - amd64
-    - "386"
+    main: cmd/df-pv/main.go
+    binary: df-pv
     env:
       - CGO_ENABLED=0
-    main: cmd/df-pv/main.go
-    ldflags: -s -w
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.version={{.Version}}
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
-      -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.buildTime={{.Date}}
-      -extldflags "-static"
-    flags: -tags netgo -installsuffix netgo
-    binary: df-pv
-    hooks: {}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    flags:
+      - -tags=netgo
+      - -installsuffix
+      - netgo
+    ldflags:
+      - -s -w
+      - -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.version={{.Version}}
+      - -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.gitSHA={{.Commit}}
+      - -X github.com/yashbhutwala/kubectl-df-pv/pkg/version.buildTime={{.Date}}
+      - -extldflags "-static"
+
+# Let GoReleaser choose defaults per-OS (tar.gz for unix, zip for windows),
+# while ensuring common docs are embedded in the archives.
 archives:
-  - id: df-pv
-    builds:
-    - df-pv
-    format: tar.gz
-    format_overrides:
-    - goos: windows
-      format: zip
-    # name_template: '{{ .Binary }}_{{.Version}}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{.Arm }}{{ end }}-{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
-    name_template: '{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+  - name_template: '{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     files:
       - licence*
       - LICENCE*

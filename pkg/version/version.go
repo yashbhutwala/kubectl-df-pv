@@ -8,12 +8,34 @@ var (
     buildTime = ""
 )
 
-// String returns a human-readable version string.
-func String() string {
-    v := version
-    if v == "" {
-        v = "dev"
+// Version returns the version string (e.g. v0.4.0 or dev).
+func Version() string {
+    if version == "" {
+        return "dev"
     }
-    return v
+    return version
 }
 
+// GitSHA returns the git commit SHA, if available.
+func GitSHA() string { return gitSHA }
+
+// BuildTime returns the build time, if available.
+func BuildTime() string { return buildTime }
+
+// String returns a human-readable version string.
+func String() string { return Version() }
+
+// Info returns a multi-field version line suitable for CLI output.
+func Info() string {
+    v := Version()
+    if gitSHA == "" && buildTime == "" {
+        return v
+    }
+    if gitSHA != "" && buildTime != "" {
+        return v + " (" + gitSHA + ", " + buildTime + ")"
+    }
+    if gitSHA != "" {
+        return v + " (" + gitSHA + ")"
+    }
+    return v + " (" + buildTime + ")"
+}

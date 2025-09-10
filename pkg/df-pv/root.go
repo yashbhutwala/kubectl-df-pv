@@ -19,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/yashbhutwala/kubectl-df-pv/pkg/version"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,6 +74,16 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 			return runRootCommand(flags)
 		},
 	}
+
+	// version subcommand
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version.Info())
+		},
+	}
+	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 	rootCmd.Flags().BoolVarP(&flags.disableColor, "disable-color", "d", false, "boolean flag for disabling colored output")
