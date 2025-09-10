@@ -27,6 +27,22 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// IEC (binary) byte size constants for readability
+const (
+    kibibyte int64 = 1 << 10
+    mebibyte int64 = 1 << 20
+    gibibyte int64 = 1 << 30
+    tebibyte int64 = 1 << 40
+)
+
+// Decimal (SI) byte size constants for readability
+const (
+    kilobyte int64 = 1000
+    megabyte int64 = 1000 * kilobyte
+    gigabyte int64 = 1000 * megabyte
+    terabyte int64 = 1000 * gigabyte
+)
+
 // InitAndExecute sets up and executes the cobra root command
 func InitAndExecute() {
 	rootCmd := setupRootCommand()
@@ -150,65 +166,56 @@ func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 // ConvertQuantityValueToHumanReadableIECString converts value to human readable IEC format
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
-	var val = float64(quantity.Value())
-	var suffix string
+    bytes := quantity.Value()
+    if bytes < 0 {
+        bytes = 0
+    }
 
-	// https://en.wikipedia.org/wiki/Tebibyte
-	// 1 TiB = 2^40 bytes = 1099511627776 bytes = 1024 gibibytes
-	TiConvertedVal := val / 1099511627776
-	// https://en.wikipedia.org/wiki/Gibibyte
-	// 1 GiB = 2^30 bytes = 1073741824 bytes = 1024 mebibytes
-	GiConvertedVal := val / 1073741824
-	// https://en.wikipedia.org/wiki/Mebibyte
-	// 1 MiB = 2^20 bytes = 1048576 bytes = 1024 kibibytes
-	MiConvertedVal := val / 1048576
-	// https://en.wikipedia.org/wiki/Kibibyte
-	// 1 KiB = 2^10 bytes = 1024 bytes
-	KiConvertedVal := val / 1024
+    var val float64
+    var suffix string
 
-	if 1 < TiConvertedVal {
-		suffix = "Ti"
-		val = TiConvertedVal
-	} else if 1 < GiConvertedVal {
-		suffix = "Gi"
-		val = GiConvertedVal
-	} else if 1 < MiConvertedVal {
-		suffix = "Mi"
-		val = MiConvertedVal
-	} else if 1 < KiConvertedVal {
-		suffix = "Ki"
-		val = KiConvertedVal
-	}
-	// strip trailing zeroes, then strip decimal if not >= 0.01
-	strVal := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".")
-	return fmt.Sprintf("%s%s", strVal, suffix)
+    switch {
+    case bytes >= tebibyte:
+        val = float64(bytes) / float64(tebibyte)
+        suffix = "Ti"
+    case bytes >= gibibyte:
+        val = float64(bytes) / float64(gibibyte)
+        suffix = "Gi"
+    case bytes >= mebibyte:
+        val = float64(bytes) / float64(mebibyte)
+        suffix = "Mi"
+    case bytes >= kibibyte:
+        val = float64(bytes) / float64(kibibyte)
+        suffix = "Ki"
+    default:
+        return fmt.Sprintf("%d", bytes)
+    }
+
+    // strip trailing zeroes, then strip decimal if not needed
+    strVal := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".")
+    return fmt.Sprintf("%s%s", strVal, suffix)
 }
 
 // ConvertQuantityValueToHumanReadableDecimalString converts value to human readable decimal format
 func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantity) string {
-	var val = quantity.Value()
-	var suffix string
+    val := quantity.Value()
 
-	TBConvertedVal := val / 1000000000000
-	GBConvertedVal := val / 1000000000
-	MBConvertedVal := val / 1000000
-	KBConvertedVal := val / 1000
+    TBConvertedVal := val / terabyte
+    GBConvertedVal := val / gigabyte
+    MBConvertedVal := val / megabyte
+    KBConvertedVal := val / kilobyte
 
-	if 1 < TBConvertedVal {
-		suffix = "TB"
-		return fmt.Sprintf("%d%s", TBConvertedVal, suffix)
-	} else if 1 < GBConvertedVal {
-		suffix = "GB"
-		return fmt.Sprintf("%d%s", GBConvertedVal, suffix)
-	} else if 1 < MBConvertedVal {
-		suffix = "MB"
-		return fmt.Sprintf("%d%s", MBConvertedVal, suffix)
-	} else if 1 < KBConvertedVal {
-		suffix = "KB"
-		return fmt.Sprintf("%d%s", KBConvertedVal, suffix)
-	} else {
-		return fmt.Sprintf("%d", val)
-	}
+    if TBConvertedVal > 1 {
+        return fmt.Sprintf("%d%s", TBConvertedVal, "TB")
+    } else if GBConvertedVal > 1 {
+        return fmt.Sprintf("%d%s", GBConvertedVal, "GB")
+    } else if MBConvertedVal > 1 {
+        return fmt.Sprintf("%d%s", MBConvertedVal, "MB")
+    } else if KBConvertedVal > 1 {
+        return fmt.Sprintf("%d%s", KBConvertedVal, "KB")
+    } else {
+        return fmt.Sprintf("%d", val)
+    }
 }
 
 // OutputRowPVC represents the output row
