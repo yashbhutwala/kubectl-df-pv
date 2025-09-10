@@ -1,6 +1,6 @@
 version: 2
 
-project: kubectl-df-pv
+project_name: kubectl-df-pv
 
 release:
   github:
