@@ -14,6 +14,12 @@ A `kubectl` plugin to see `df` for persistent volumes.
 
 ## Installation
 
+### Via Go
+
+```shell script
+go run github.com/yashbhutwala/kubectl-df-pv/cmd/df-pv@latest
+```
+
 ### Via Krew
 
 ```shell script
