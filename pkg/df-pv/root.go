@@ -30,18 +30,18 @@ import (
 
 // IEC (binary) byte size constants for readability
 const (
-    kibibyte int64 = 1 << 10
-    mebibyte int64 = 1 << 20
-    gibibyte int64 = 1 << 30
-    tebibyte int64 = 1 << 40
+	kibibyte int64 = 1 << 10
+	mebibyte int64 = 1 << 20
+	gibibyte int64 = 1 << 30
+	tebibyte int64 = 1 << 40
 )
 
 // Decimal (SI) byte size constants for readability
 const (
-    kilobyte int64 = 1000
-    megabyte int64 = 1000 * kilobyte
-    gigabyte int64 = 1000 * megabyte
-    terabyte int64 = 1000 * gigabyte
+	kilobyte int64 = 1000
+	megabyte int64 = 1000 * kilobyte
+	gigabyte int64 = 1000 * megabyte
+	terabyte int64 = 1000 * gigabyte
 )
 
 // InitAndExecute sets up and executes the cobra root command
@@ -177,56 +177,56 @@ func GetColorFromPercentageUsed(percentageUsed float64) text.Color {
 // ConvertQuantityValueToHumanReadableIECString converts value to human readable IEC format
 // https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 func ConvertQuantityValueToHumanReadableIECString(quantity *resource.Quantity) string {
-    bytes := quantity.Value()
-    if bytes < 0 {
-        bytes = 0
-    }
+	bytes := quantity.Value()
+	if bytes < 0 {
+		bytes = 0
+	}
 
-    var val float64
-    var suffix string
+	var val float64
+	var suffix string
 
-    switch {
-    case bytes >= tebibyte:
-        val = float64(bytes) / float64(tebibyte)
-        suffix = "Ti"
-    case bytes >= gibibyte:
-        val = float64(bytes) / float64(gibibyte)
-        suffix = "Gi"
-    case bytes >= mebibyte:
-        val = float64(bytes) / float64(mebibyte)
-        suffix = "Mi"
-    case bytes >= kibibyte:
-        val = float64(bytes) / float64(kibibyte)
-        suffix = "Ki"
-    default:
-        return fmt.Sprintf("%d", bytes)
-    }
+	switch {
+	case bytes >= tebibyte:
+		val = float64(bytes) / float64(tebibyte)
+		suffix = "Ti"
+	case bytes >= gibibyte:
+		val = float64(bytes) / float64(gibibyte)
+		suffix = "Gi"
+	case bytes >= mebibyte:
+		val = float64(bytes) / float64(mebibyte)
+		suffix = "Mi"
+	case bytes >= kibibyte:
+		val = float64(bytes) / float64(kibibyte)
+		suffix = "Ki"
+	default:
+		return fmt.Sprintf("%d", bytes)
+	}
 
-    // strip trailing zeroes, then strip decimal if not needed
-    strVal := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".")
-    return fmt.Sprintf("%s%s", strVal, suffix)
+	// strip trailing zeroes, then strip decimal if not needed
+	strVal := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".")
+	return fmt.Sprintf("%s%s", strVal, suffix)
 }
 
 // ConvertQuantityValueToHumanReadableDecimalString converts value to human readable decimal format
 func ConvertQuantityValueToHumanReadableDecimalString(quantity *resource.Quantity) string {
-    val := quantity.Value()
+	val := quantity.Value()
 
-    TBConvertedVal := val / terabyte
-    GBConvertedVal := val / gigabyte
-    MBConvertedVal := val / megabyte
-    KBConvertedVal := val / kilobyte
+	TBConvertedVal := val / terabyte
+	GBConvertedVal := val / gigabyte
+	MBConvertedVal := val / megabyte
+	KBConvertedVal := val / kilobyte
 
-    if TBConvertedVal > 1 {
-        return fmt.Sprintf("%d%s", TBConvertedVal, "TB")
-    } else if GBConvertedVal > 1 {
-        return fmt.Sprintf("%d%s", GBConvertedVal, "GB")
-    } else if MBConvertedVal > 1 {
-        return fmt.Sprintf("%d%s", MBConvertedVal, "MB")
-    } else if KBConvertedVal > 1 {
-        return fmt.Sprintf("%d%s", KBConvertedVal, "KB")
-    } else {
-        return fmt.Sprintf("%d", val)
-    }
+	if TBConvertedVal > 1 {
+		return fmt.Sprintf("%d%s", TBConvertedVal, "TB")
+	} else if GBConvertedVal > 1 {
+		return fmt.Sprintf("%d%s", GBConvertedVal, "GB")
+	} else if MBConvertedVal > 1 {
+		return fmt.Sprintf("%d%s", MBConvertedVal, "MB")
+	} else if KBConvertedVal > 1 {
+		return fmt.Sprintf("%d%s", KBConvertedVal, "KB")
+	} else {
+		return fmt.Sprintf("%d", val)
+	}
 }
 
 // OutputRowPVC represents the output row
@@ -426,6 +426,10 @@ func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Cl
 	var producerGroup run.Group
 	for _, nodeName := range nodeNames {
 		nodeName := nodeName
+		if nodeName == "" {
+			log.Warnf("skipping empty node name")
+			continue
+		}
 		producerGroup.Add(func() error {
 			return GetOutputRowPVCFromNode(ctx, clientset, desiredNamespace, nodeName, outputRowPVCChan)
 		}, func(err error) {
