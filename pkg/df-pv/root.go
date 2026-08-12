@@ -97,6 +97,10 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 }
 
 func runRootCommand(flags *flagpole) error {
+	if _, err := parseColumns(flags.columns); err != nil {
+		return errors.Wrap(err, "invalid columns")
+	}
+
 	logLevel, _ := log.ParseLevel(flags.logLevel)
 	log.SetLevel(logLevel)
 	log.SetFormatter(&log.TextFormatter{
@@ -116,7 +120,9 @@ func runRootCommand(flags *flagpole) error {
 		}
 		log.Infof("Either no volumes found in namespace/s: '%s' or the storage provisioner used for the volumes does not publish metrics to kubelet", ns)
 	} else {
-		PrintUsingGoPretty(sliceOfOutputRowPVC, flags.disableColor, flags.columns)
+		if err := PrintUsingGoPretty(sliceOfOutputRowPVC, flags.disableColor, flags.columns); err != nil {
+			return errors.Wrap(err, "error printing output")
+		}
 	}
 
 	return nil
@@ -129,8 +135,51 @@ type columnDef struct {
 	format string
 }
 
+var defaultColumnOrder = []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used", "iused", "ifree", "%iused"}
+
+var validColumnNames = map[string]struct{}{
+	"pv":        {},
+	"pvc":       {},
+	"namespace": {},
+	"node":      {},
+	"pod":       {},
+	"mount":     {},
+	"size":      {},
+	"used":      {},
+	"available": {},
+	"%used":     {},
+	"iused":     {},
+	"ifree":     {},
+	"%iused":    {},
+}
+
+func parseColumns(columns string) ([]string, error) {
+	if columns == "" {
+		return append([]string(nil), defaultColumnOrder...), nil
+	}
+
+	selectedColumns := strings.Split(columns, ",")
+	for i, colName := range selectedColumns {
+		normalizedName := strings.TrimSpace(strings.ToLower(colName))
+		if normalizedName == "" {
+			return nil, fmt.Errorf("column name cannot be empty; available columns: %s", strings.Join(defaultColumnOrder, ", "))
+		}
+		if _, ok := validColumnNames[normalizedName]; !ok {
+			return nil, fmt.Errorf("unknown column %q; available columns: %s", colName, strings.Join(defaultColumnOrder, ", "))
+		}
+		selectedColumns[i] = normalizedName
+	}
+
+	return selectedColumns, nil
+}
+
 // PrintUsingGoPretty prints a slice of output rows
-func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool, columns string) {
+func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool, columns string) error {
+	selectedColumns, err := parseColumns(columns)
+	if err != nil {
+		return err
+	}
+
 	if disableColor {
 		text.DisableColors()
 	}
@@ -218,15 +267,6 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool, 
 		},
 	}
 
-	defaultOrder := []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used", "iused", "ifree", "%iused"}
-	var selectedColumns []string
-
-	if columns == "" {
-		selectedColumns = defaultOrder
-	} else {
-		selectedColumns = strings.Split(columns, ",")
-	}
-
 	var headerRow table.Row
 	for _, colName := range selectedColumns {
 		colName = strings.TrimSpace(strings.ToLower(colName))
@@ -262,6 +302,7 @@ func PrintUsingGoPretty(sliceOfOutputRowPVC []*OutputRowPVC, disableColor bool, 
 	// t.SetAutoIndex(true)
 	// t.SetOutputMirror(os.Stdout)
 	fmt.Printf("\n%s\n\n", t.Render())
+	return nil
 }
 
 // GetColorFromPercentageUsed gives a color based on percentage

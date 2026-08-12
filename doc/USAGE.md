@@ -9,8 +9,7 @@ df-pv
 ## Usage with Columns
 
 ```bash
-df-pv --columns "pv
-ze"
+df-pv --columns "pv,size"
 ```
 
 Available columns:
