@@ -423,6 +423,9 @@ func ConsumeOutputRowsConcurrently(outputRowPVCChan <-chan *OutputRowPVC) []*Out
 
 // ProduceOutputRowsConcurrently produces output rows concurrently
 func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string, nodeNames []string, outputRowPVCChan chan<- *OutputRowPVC) error {
+	producerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var producerGroup run.Group
 	for _, nodeName := range nodeNames {
 		nodeName := nodeName
@@ -431,18 +434,17 @@ func ProduceOutputRowsConcurrently(ctx context.Context, clientset *kubernetes.Cl
 			continue
 		}
 		producerGroup.Add(func() error {
-			return GetOutputRowPVCFromNode(ctx, clientset, desiredNamespace, nodeName, outputRowPVCChan)
+			return GetOutputRowPVCFromNode(producerCtx, clientset, desiredNamespace, nodeName, outputRowPVCChan)
 		}, func(err error) {
 			if err != nil {
+				cancel()
 				log.Infof("TODO goroutine error handling; current actor was interrupted with: %v\n", err)
 			}
 		})
 	}
-	if err := producerGroup.Run(); err != nil {
-		return err
-	}
+	err := producerGroup.Run()
 	close(outputRowPVCChan)
-	return nil
+	return err
 }
 
 // GetOutputRowPVCFromNode gets the output row given a nodeName
