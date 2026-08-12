@@ -2,8 +2,12 @@ package df_pv
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +15,124 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
+
+func TestPrintUsingGoPrettySelectsRequestedColumns(t *testing.T) {
+	capacity := resource.MustParse("10Gi")
+	used := resource.MustParse("2Gi")
+	available := resource.MustParse("8Gi")
+	rows := []*OutputRowPVC{{
+		PVName:          "pv-a",
+		PVCName:         "pvc-a",
+		CapacityBytes:   &capacity,
+		UsedBytes:       &used,
+		AvailableBytes:  &available,
+		PercentageUsed:  20,
+		VolumeMountName: "mount-a",
+	}}
+
+	var printErr error
+	output := captureStdout(t, func() {
+		printErr = PrintUsingGoPretty(rows, true, "pv,size")
+	})
+	if printErr != nil {
+		t.Fatalf("PrintUsingGoPretty returned unexpected error: %v", printErr)
+	}
+
+	for _, want := range []string{"PV NAME", "SIZE", "pv-a", "10Gi"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("PrintUsingGoPretty output = %q, missing %q", output, want)
+		}
+	}
+	if strings.Contains(output, "PVC NAME") || strings.Contains(output, "pvc-a") {
+		t.Fatalf("PrintUsingGoPretty output = %q, unexpectedly contains unselected PVC column", output)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() failed: %v", err)
+	}
+	os.Stdout = writer
+	fn()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("closing captured stdout failed: %v", err)
+	}
+	os.Stdout = originalStdout
+
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("reading captured stdout failed: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("closing captured stdout reader failed: %v", err)
+	}
+	return string(output)
+}
+
+func TestParseColumns(t *testing.T) {
+	tests := []struct {
+		name       string
+		columns    string
+		want       []string
+		errorMatch string
+	}{
+		{
+			name:    "default columns",
+			columns: "",
+			want:    defaultColumnOrder,
+		},
+		{
+			name:    "normalizes names and preserves order",
+			columns: " PV, size, %USED ",
+			want:    []string{"pv", "size", "%used"},
+		},
+		{
+			name:       "rejects unknown column",
+			columns:    "pv,not-a-column",
+			errorMatch: `unknown column "not-a-column"`,
+		},
+		{
+			name:       "rejects empty column",
+			columns:    "pv,,size",
+			errorMatch: "column name cannot be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseColumns(tt.columns)
+			if tt.errorMatch != "" {
+				if err == nil {
+					t.Fatalf("parseColumns(%q) returned nil error", tt.columns)
+				}
+				if !strings.Contains(err.Error(), tt.errorMatch) {
+					t.Fatalf("parseColumns(%q) error = %q, want substring %q", tt.columns, err, tt.errorMatch)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseColumns(%q) returned unexpected error: %v", tt.columns, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("parseColumns(%q) = %#v, want %#v", tt.columns, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunRootCommandRejectsInvalidColumnsBeforeKubernetesAccess(t *testing.T) {
+	err := runRootCommand(&flagpole{columns: "bogus"})
+	if err == nil {
+		t.Fatal("runRootCommand returned nil for an invalid column")
+	}
+	if !strings.Contains(err.Error(), `unknown column "bogus"`) {
+		t.Fatalf("runRootCommand error = %q, want unknown-column message", err)
+	}
+}
 
 func TestConvertQuantityValueToHumanReadableIECString(t *testing.T) {
 	tests := []struct {
