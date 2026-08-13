@@ -83,12 +83,17 @@ func TestParseColumns(t *testing.T) {
 		{
 			name:    "default columns",
 			columns: "",
-			want:    defaultColumnOrder,
+			want:    []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used"},
 		},
 		{
 			name:    "normalizes names and preserves order",
 			columns: " PV, size, %USED ",
 			want:    []string{"pv", "size", "%used"},
+		},
+		{
+			name:    "allows inode columns explicitly",
+			columns: "iused,ifree,%iused",
+			want:    []string{"iused", "ifree", "%iused"},
 		},
 		{
 			name:       "rejects unknown column",

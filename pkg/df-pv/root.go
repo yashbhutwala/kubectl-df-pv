@@ -135,7 +135,9 @@ type columnDef struct {
 	format string
 }
 
-var defaultColumnOrder = []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used", "iused", "ifree", "%iused"}
+var defaultColumnOrder = []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used"}
+
+var availableColumnOrder = []string{"pv", "pvc", "namespace", "node", "pod", "mount", "size", "used", "available", "%used", "iused", "ifree", "%iused"}
 
 var validColumnNames = map[string]struct{}{
 	"pv":        {},
@@ -162,10 +164,10 @@ func parseColumns(columns string) ([]string, error) {
 	for i, colName := range selectedColumns {
 		normalizedName := strings.TrimSpace(strings.ToLower(colName))
 		if normalizedName == "" {
-			return nil, fmt.Errorf("column name cannot be empty; available columns: %s", strings.Join(defaultColumnOrder, ", "))
+			return nil, fmt.Errorf("column name cannot be empty; available columns: %s", strings.Join(availableColumnOrder, ", "))
 		}
 		if _, ok := validColumnNames[normalizedName]; !ok {
-			return nil, fmt.Errorf("unknown column %q; available columns: %s", colName, strings.Join(defaultColumnOrder, ", "))
+			return nil, fmt.Errorf("unknown column %q; available columns: %s", colName, strings.Join(availableColumnOrder, ", "))
 		}
 		selectedColumns[i] = normalizedName
 	}

@@ -12,6 +12,8 @@ df-pv
 df-pv --columns "pv,size"
 ```
 
+The inode columns (`iused`, `ifree`, and `%iused`) are available when explicitly selected, but are omitted from the default output.
+
 Available columns:
 - pv
 - pvc
