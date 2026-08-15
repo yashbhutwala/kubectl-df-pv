@@ -54,10 +54,11 @@ func InitAndExecute() {
 }
 
 type flagpole struct {
-	logLevel              string
+	disableColor     bool
+	logLevel         string
+	columns          string
 	genericCliConfigFlags *genericclioptions.ConfigFlags
-	disableColor          bool
-	columns               string
+	deduplicate      bool
 }
 
 func setupRootCommand() *cobra.Command {
@@ -89,6 +90,7 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 	rootCmd.Flags().BoolVarP(&flags.disableColor, "disable-color", "d", false, "boolean flag for disabling colored output")
 	rootCmd.Flags().StringVar(&flags.columns, "columns", "", "comma separated list of columns to show")
+	rootCmd.Flags().BoolVar(&flags.deduplicate, "deduplicate", false, "deduplicate PV entries (show only one row per PV)")
 
 	flags.genericCliConfigFlags = genericclioptions.NewConfigFlags(false)
 	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
@@ -110,6 +112,10 @@ func runRootCommand(flags *flagpole) error {
 	sliceOfOutputRowPVC, err := GetSliceOfOutputRowPVC(flags)
 	if err != nil {
 		return errors.Wrapf(err, "error getting output slice")
+	}
+
+	if flags.deduplicate {
+		sliceOfOutputRowPVC = DeduplicateOutputRows(sliceOfOutputRowPVC)
 	}
 
 	if nil == sliceOfOutputRowPVC || 0 > len(sliceOfOutputRowPVC) {
@@ -764,9 +770,33 @@ func ListPVCs(ctx context.Context, clientset *kubernetes.Clientset, namespace st
 }
 
 // ListPVs returns a list of PVs, scoped to corresponding mapped PVCs based on the namespace
-func ListPVs(ctx context.Context, clientset *kubernetes.Clientset, namespace string) {
-	pvList, _ := clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+func ListPVs(ctx context.Context, clientset *kubernetes.Clientset, desiredNamespace string) ([]*OutputRowPVC, error) {
+	pvList, err := clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
 	var pvcNames []string
+	for _, pv := range pvList.Items {
+		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Namespace == desiredNamespace {
+			pvcNames = append(pvcNames, pv.Spec.ClaimRef.Name)
+		}
+	}
+	return pvcNames, nil
+}
+
+// DeduplicateOutputRows removes duplicate PV entries, keeping the first occurrence
+func DeduplicateOutputRows(rows []*OutputRowPVC) []*OutputRowPVC {
+	seen := make(map[string]bool)
+	var result []*OutputRowPVC
+	for _, row := range rows {
+		key := fmt.Sprintf("%s/%s/%s", row.PVName, row.PVCName, row.Namespace)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, row)
+		}
+	}
+	return result
+}
 	for _, pv := range pvList.Items {
 		if pv.Spec.ClaimRef.Name == namespace {
 			pvcName := pv.Spec.ClaimRef.Name
