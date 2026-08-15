@@ -58,6 +58,7 @@ type flagpole struct {
 	genericCliConfigFlags *genericclioptions.ConfigFlags
 	disableColor          bool
 	columns               string
+	deduplicate           bool
 }
 
 func setupRootCommand() *cobra.Command {
@@ -89,6 +90,7 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 	rootCmd.Flags().BoolVarP(&flags.disableColor, "disable-color", "d", false, "boolean flag for disabling colored output")
 	rootCmd.Flags().StringVar(&flags.columns, "columns", "", "comma separated list of columns to show")
+	rootCmd.Flags().BoolVar(&flags.deduplicate, "deduplicate", false, "deduplicate PV entries (show only one row per PV)")
 
 	flags.genericCliConfigFlags = genericclioptions.NewConfigFlags(false)
 	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
@@ -110,6 +112,10 @@ func runRootCommand(flags *flagpole) error {
 	sliceOfOutputRowPVC, err := GetSliceOfOutputRowPVC(flags)
 	if err != nil {
 		return errors.Wrapf(err, "error getting output slice")
+	}
+
+	if flags.deduplicate {
+		sliceOfOutputRowPVC = DeduplicateOutputRows(sliceOfOutputRowPVC)
 	}
 
 	if nil == sliceOfOutputRowPVC || 0 > len(sliceOfOutputRowPVC) {
@@ -773,4 +779,18 @@ func ListPVs(ctx context.Context, clientset *kubernetes.Clientset, namespace str
 			pvcNames = append(pvcNames, pvcName)
 		}
 	}
+}
+
+// DeduplicateOutputRows removes duplicate PV entries, keeping the first occurrence
+func DeduplicateOutputRows(rows []*OutputRowPVC) []*OutputRowPVC {
+	seen := make(map[string]bool)
+	var result []*OutputRowPVC
+	for _, row := range rows {
+		key := fmt.Sprintf("%s/%s/%s", row.PVName, row.PVCName, row.Namespace)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, row)
+		}
+	}
+	return result
 }
