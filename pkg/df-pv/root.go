@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	// "github.com/fatih/color"
@@ -58,6 +59,8 @@ type flagpole struct {
 	genericCliConfigFlags *genericclioptions.ConfigFlags
 	disableColor          bool
 	columns               string
+	sortBy                string
+	sortOrder             string
 }
 
 func setupRootCommand() *cobra.Command {
@@ -89,6 +92,8 @@ It colors the values based on "severity" [red: > 75% (too high); yellow: < 25% (
 	rootCmd.PersistentFlags().StringVarP(&flags.logLevel, "verbosity", "v", "info", "log level; one of [info, debug, trace, warn, error, fatal, panic]")
 	rootCmd.Flags().BoolVarP(&flags.disableColor, "disable-color", "d", false, "boolean flag for disabling colored output")
 	rootCmd.Flags().StringVar(&flags.columns, "columns", "", "comma separated list of columns to show")
+	rootCmd.Flags().StringVar(&flags.sortBy, "sort-by", "pv", "column to sort by (pv, pvc, namespace, node, pod, size, used, available, %used, iused, ifree, %iused)")
+	rootCmd.Flags().StringVar(&flags.sortOrder, "sort-order", "asc", "sort order: asc or desc")
 
 	flags.genericCliConfigFlags = genericclioptions.NewConfigFlags(false)
 	flags.genericCliConfigFlags.AddFlags(rootCmd.Flags())
@@ -120,6 +125,9 @@ func runRootCommand(flags *flagpole) error {
 		}
 		log.Infof("Either no volumes found in namespace/s: '%s' or the storage provisioner used for the volumes does not publish metrics to kubelet", ns)
 	} else {
+		if err := sortOutputRows(sliceOfOutputRowPVC, flags.sortBy, flags.sortOrder); err != nil {
+			return errors.Wrap(err, "error sorting output")
+		}
 		if err := PrintUsingGoPretty(sliceOfOutputRowPVC, flags.disableColor, flags.columns); err != nil {
 			return errors.Wrap(err, "error printing output")
 		}
@@ -173,6 +181,66 @@ func parseColumns(columns string) ([]string, error) {
 	}
 
 	return selectedColumns, nil
+}
+
+// sortOutputRows sorts the output rows by the specified column and order
+func sortOutputRows(rows []*OutputRowPVC, sortBy, sortOrder string) error {
+	sortBy = strings.ToLower(strings.TrimSpace(sortBy))
+	sortOrder = strings.ToLower(strings.TrimSpace(sortOrder))
+
+	sort.SliceStable(rows, func(i, j int) bool {
+		var vi, vj interface{}
+		switch sortBy {
+		case "pv":
+			vi, vj = rows[i].PVName, rows[j].PVName
+		case "pvc":
+			vi, vj = rows[i].PVCName, rows[j].PVCName
+		case "namespace":
+			vi, vj = rows[i].Namespace, rows[j].Namespace
+		case "node":
+			vi, vj = rows[i].NodeName, rows[j].NodeName
+		case "pod":
+			vi, vj = rows[i].PodName, rows[j].PodName
+		case "size":
+			vi, vj = rows[i].CapacityBytes.Value(), rows[j].CapacityBytes.Value()
+		case "used":
+			vi, vj = rows[i].UsedBytes.Value(), rows[j].UsedBytes.Value()
+		case "available":
+			vi, vj = rows[i].AvailableBytes.Value(), rows[j].AvailableBytes.Value()
+		case "%used":
+			vi, vj = rows[i].PercentageUsed, rows[j].PercentageUsed
+		case "iused":
+			vi, vj = rows[i].InodesUsed, rows[j].InodesUsed
+		case "ifree":
+			vi, vj = rows[i].InodesFree, rows[j].InodesFree
+		case "%iused":
+			vi, vj = rows[i].PercentageIUsed, rows[j].PercentageIUsed
+		default:
+			vi, vj = rows[i].PVName, rows[j].PVName
+		}
+
+		switch iv := vi.(type) {
+		case int64:
+			jv := vj.(int64)
+			if sortOrder == "desc" {
+				return iv > jv
+			}
+			return iv < jv
+		case float64:
+			jv := vj.(float64)
+			if sortOrder == "desc" {
+				return iv > jv
+			}
+			return iv < jv
+		default:
+			is, js := vi.(string), vj.(string)
+			if sortOrder == "desc" {
+				return is > js
+			}
+			return is < js
+		}
+	})
+	return nil
 }
 
 // PrintUsingGoPretty prints a slice of output rows
