@@ -505,6 +505,10 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 	}
 
 	desiredNamespace := *flags.genericCliConfigFlags.Namespace
+	// Fall back to "all" only if empty
+	if 0 == len(desiredNamespace) {
+		desiredNamespace = "all"
+	}
 	// desiredNamespace := flags.namespace
 	var sliceOfNodeName []string
 	if 0 == len(desiredNamespace) {
