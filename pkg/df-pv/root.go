@@ -556,10 +556,17 @@ func GetSliceOfOutputRowPVC(flags *flagpole) ([]*OutputRowPVC, error) {
 	return sliceOfOutputRowPVC, mainGroup.Run()
 }
 
-// ConsumeOutputRowsConcurrently consumes processed output rows concurrently
+// ConsumeOutputRowsConcurrently consumes processed output rows concurrently,
+// deduplicating by PV name to avoid showing the same PV multiple times
+// when it's used by multiple pods.
 func ConsumeOutputRowsConcurrently(outputRowPVCChan <-chan *OutputRowPVC) []*OutputRowPVC {
+	seen := make(map[string]bool)
 	var sliceOfOutputRowPVC []*OutputRowPVC
 	for outputRowPVC := range outputRowPVCChan {
+		if seen[outputRowPVC.PVName] {
+			continue
+		}
+		seen[outputRowPVC.PVName] = true
 		sliceOfOutputRowPVC = append(sliceOfOutputRowPVC, outputRowPVC)
 	}
 	return sliceOfOutputRowPVC
